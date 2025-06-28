@@ -10,6 +10,198 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+}
+
+// ==============
+// MODEL PENGGUNA & PROFIL
+// Desain ini memisahkan data login (User) dari data pribadi (UserProfile)
+// untuk keamanan dan fleksibilitas.
+// ==============
+
+enum Role {
+  WARGA
+  STAF
+  KEPALA_DESA
+  SUPER_ADMIN // Peran untuk masa depan, misal untuk pengelola tingkat kecamatan/kabupaten
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String
+  role         Role      @default(WARGA)
+  isActive     Boolean   @default(true) // Untuk menonaktifkan akun jika perlu
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  profile      UserProfile? // Relasi one-to-one ke profil
+  logs         LogAktivitas[] // Semua aktivitas yang dilakukan user ini
+  suratKeluarDiajukan SuratKeluar[] @relation("Pemohon")
+  suratKeluarDiverifikasi SuratKeluar[] @relation("StafVerifikator")
+  suratKeluarDisahkan    SuratKeluar[] @relation("KadesPengesah")
+  suratMasukDicatat      SuratMasuk[] @relation("Pencatat")
+  pengumumanDibuat       Pengumuman[] @relation("Penulis")
+}
+
+enum JenisKelamin {
+  LAKI_LAKI
+  PEREMPUAN
+}
+enum StatusPerkawinan {
+  BELUM_KAWIN
+  KAWIN
+  CERAI_HIDUP
+  CERAI_MATI
+}
+model UserProfile {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // --- Data Utama Sesuai KTP/KK ---
+  nik              String            @unique
+  nomorKK          String?           // Nomor Kartu Keluarga
+  namaLengkap      String
+  jenisKelamin     JenisKelamin?
+  tempatLahir      String?
+  tanggalLahir     DateTime?
+  agama            String?
+  pendidikanTerakhir String?
+  pekerjaan        String?
+  statusPerkawinan StatusPerkawinan?
+  statusHubKeluarga String?          // Misal: "Kepala Keluarga", "Istri", "Anak"
+
+  // --- Data Kewarganegaraan & Dokumen ---
+  kewarganegaraan  String?           @default("WNI")
+  namaAyah         String?
+  namaIbu          String?
+
+  // --- Data Kontak & Alamat ---
+  nomorTelepon     String?
+  alamatKTP        String?           // Alamat sesuai KTP
+  rt               String?
+  rw               String?
+  kelurahanDesa    String?
+  kecamatan        String?
+  kabupatenKota    String?
+  provinsi         String?
+  kodePos          String?
+
+  // --- Metadata ---
+  updatedAt        DateTime          @updatedAt
+}
+
+// ==============
+// MODEL MANAJEMEN SURAT
+// Inti dari aplikasi pelayanan desa
+// ==============
+
+enum StatusSurat {
+  PENDING     // Baru diajukan oleh warga
+  DIVERIFIKASI // Sudah diperiksa dan valid oleh Staf
+  DITOLAK     // Ditolak oleh Staf karena data tidak valid
+  DISETUJUI   // Disetujui oleh Kepala Desa, siap diunduh
+  SELESAI     // Proses selesai (misal: setelah diunduh/diambil)
+}
+
+model SuratKeluar {
+  id              String   @id @default(cuid())
+  nomorSurat      String?  @unique // Di-generate setelah disetujui
+  status          StatusSurat @default(PENDING)
+  formData        Json     // Data dinamis dari formulir pengajuan
+  filePersyaratan String[] // Daftar URL file persyaratan yang diunggah
+  catatanRevisi   String?  // Alasan penolakan dari Staf
+  fileGenerated   String?  // URL file PDF surat yang sudah jadi
+  tanggalSelesai  DateTime?
+  
+  pemohonId       String
+  pemohon         User     @relation("Pemohon", fields: [pemohonId], references: [id])
+  
+  verifikatorId   String?
+  verifikator     User?    @relation("StafVerifikator", fields: [verifikatorId], references: [id])
+  
+  pengesahId      String?
+  pengesah        User?    @relation("KadesPengesah", fields: [pengesahId], references: [id])
+  
+  templateId      String
+  template        TemplateSurat @relation(fields: [templateId], references: [id])
+  
+  riwayat         LogAktivitas[] // Semua riwayat yang terkait dengan surat ini
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SuratMasuk {
+  id              String   @id @default(cuid())
+  nomorSurat      String
+  tanggalSurat    DateTime
+  tanggalDiterima DateTime @default(now())
+  asalSurat       String
+  perihal         String
+  filePdf         String   // URL file PDF hasil pindaian
+  
+  pencatatId      String
+  pencatat        User     @relation("Pencatat", fields: [pencatatId], references: [id])
+  
+  riwayat         LogAktivitas[] // Riwayat disposisi surat ini
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ==============
+// MODEL PENDUKUNG & FITUR MASA DEPAN
+// ==============
+
+// Model untuk template surat yang bisa dikelola Staf Desa
+model TemplateSurat {
+  id              String   @id @default(cuid())
+  kodeSurat       String   @unique // Misal: SKD (Surat Keterangan Domisili)
+  namaSurat       String
+  deskripsi       String
+  persyaratan     String[] // Daftar teks persyaratan, misal: ["Scan KTP", "Scan KK"]
+  templateHtml    String   // Konten template dalam format HTML dengan placeholder {{nama}}, {{nik}}, dll.
+  
+  suratDihasilkan SuratKeluar[]
+  
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Model untuk pengumuman atau berita desa
+model Pengumuman {
+  id        String   @id @default(cuid())
+  judul     String
+  isi       String
+  gambarUrl String?
+  
+  penulisId String
+  penulis   User     @relation("Penulis", fields: [penulisId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Model untuk audit trail atau log aktivitas
+model LogAktivitas {
+  id          String   @id @default(cuid())
+  aktorId     String
+  aktor       User     @relation(fields: [aktorId], references: [id])
+  
+  aksi        String   
+  deskripsi   String
+  
+  // Relasi opsional ke target aksi
+  suratKeluarId String?
+  suratKeluar   SuratKeluar? @relation(fields: [suratKeluarId], references: [id])
+
+  suratMasukId String?
+  suratMasuk   SuratMasuk? @relation(fields: [suratMasukId], references: [id])
+  
+  timestamp   DateTime @default(now())
 }
