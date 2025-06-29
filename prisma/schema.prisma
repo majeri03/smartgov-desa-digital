@@ -166,6 +166,7 @@ model TemplateSurat {
   persyaratan     String[] // Daftar teks persyaratan, misal: ["Scan KTP", "Scan KK"]
   templateHtml    String   // Konten template dalam format HTML dengan placeholder {{nama}}, {{nik}}, dll.
   
+  formSchema      Json?    // Contoh: [{"name": "tujuan_surat", "label": "Tujuan Pembuatan Surat", "type": "textarea"}]
   suratDihasilkan SuratKeluar[]
   
   isActive        Boolean  @default(true)

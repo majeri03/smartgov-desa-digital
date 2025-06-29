@@ -1,0 +1,13 @@
+// tsconfig.seed.json
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2017",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
+  },
+  "include": ["prisma/seed.ts"]
+}
