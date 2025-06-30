@@ -90,7 +90,7 @@ const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSucce
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (selectedFile.size > 5 * 1024 * 1024) { // Maks 5MB
+      if (selectedFile.size > 5 * 1024 * 1024) {
         setError('Ukuran file maks 5MB.');
         return;
       }
@@ -99,14 +99,17 @@ const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSucce
     }
   };
 
+  const handleCancelSelection = () => {
+    setFile(null);
+    setError(null);
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     setIsUploading(true);
     setError(null);
     try {
-      // Memberi nama file yang konsisten di backend: NAMA_PERSYARATAN.extensi
       const cleanFileName = requirement.replace(/\s/g, '_') + '.' + file.name.split('.').pop();
-
       const urlResponse = await fetch('/api/surat/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,20 +117,17 @@ const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSucce
       });
       if (!urlResponse.ok) throw new Error('Gagal mendapatkan izin unggah.');
       const { signedUrl, filePath } = await urlResponse.json();
-
       const uploadResponse = await fetch(signedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
       if (!uploadResponse.ok) throw new Error('Proses unggah gagal.');
-
       const recordResponse = await fetch('/api/surat/berkas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ suratId, filePath }),
       });
       if (!recordResponse.ok) throw new Error('Gagal mencatat berkas.');
-
       alert(`Berkas "${requirement}" berhasil diunggah!`);
-      onUploadSuccess(); // Refresh data halaman
-      setFile(null); // Reset input file
+      onUploadSuccess();
+      setFile(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -135,7 +135,6 @@ const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSucce
     }
   };
 
-  // Jika file sudah diunggah, tampilkan status sukses
   if (uploadedFile) {
     return (
       <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3">
@@ -145,17 +144,21 @@ const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSucce
     );
   }
 
-  // Jika belum, tampilkan form uploader-nya
   return (
     <div className="rounded-lg border p-3 transition-all hover:border-gray-300">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="flex-1 font-medium text-gray-800">{requirement}</p>
-        <div className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <input type="file" accept="image/png, image/jpeg, application/pdf" onChange={handleFileChange} className="w-full cursor-pointer text-xs file:mr-2 file:cursor-pointer file:rounded-full file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold hover:file:bg-gray-200"/>
-          <button onClick={handleUpload} disabled={!file || isUploading} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:w-auto disabled:cursor-not-allowed disabled:bg-primary/50">
-            {isUploading ? '...' : 'Unggah'}
-          </button>
-        </div>
+        {!file ? (
+            <input type="file" accept="image/png, image/jpeg, application/pdf" onChange={handleFileChange} className="w-full shrink-0 cursor-pointer text-xs sm:w-auto file:mr-2 file:cursor-pointer file:rounded-full file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold hover:file:bg-gray-200"/>
+        ) : (
+          <div className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <span className="text-sm text-gray-600 truncate max-w-[150px]">{file.name}</span>
+              <button onClick={handleCancelSelection} className="text-xs text-red-500 hover:underline">Batal</button>
+              <button onClick={handleUpload} disabled={isUploading} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-primary/50">
+                {isUploading ? '...' : 'Unggah'}
+              </button>
+          </div>
+        )}
       </div>
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
       <p className="mt-2 text-xs text-gray-400">Tipe file: JPG, PNG, atau PDF. Ukuran maks: 5MB.</p>
@@ -247,7 +250,20 @@ export default function StatusSuratDetailPage() {
             />
           </div>
         </div>
-        
+        {/* Sisipkan kode ini setelah blok status utama */}
+        {(surat.status === 'DISETUJUI' || surat.status === 'SELESAI') && (
+          <div className="rounded-lg border bg-green-50 p-4 text-center shadow-sm sm:p-6">
+            <h3 className="text-lg font-bold text-green-800">Dokumen Anda Telah Terbit!</h3>
+            <p className="mt-2 text-sm text-green-700">Surat resmi Anda telah disetujui dan siap untuk diunduh atau diambil di kantor desa.</p>
+            <a 
+              href={`/api/surat/unduh/${surat.id}`} 
+              download
+              className="mt-4 inline-block w-full rounded-lg bg-green-600 px-6 py-3 text-center font-semibold text-white shadow-md hover:bg-green-700 sm:w-auto"
+            >
+              Unduh Surat Digital (.pdf)
+            </a>
+          </div>
+        )}
         {uiStatus === 'MENGISI_BERKAS' && (
           <div className="rounded-lg border bg-white p-4 shadow-sm sm:p-6">
             <h3 className="text-md font-bold text-accent-dark sm:text-lg">Unggah Berkas Persyaratan</h3>

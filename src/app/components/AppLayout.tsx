@@ -57,6 +57,8 @@ if (userRole === 'WARGA') {
 } else if (userRole === 'STAF') {
   navItems = [
     { href: '/dashboard/admin', label: 'Dasbor Verifikasi' },
+    { href: '/dashboard/admin/manajemen-template', label: 'Manajemen Template' },
+    { href: '/dashboard/admin/pengaturan', label: 'Dasbor pengaturan' },
   ];
 } else if (userRole === 'KEPALA_DESA') {
   navItems = [
@@ -116,12 +118,27 @@ if (userRole === 'WARGA') {
             <MenuIcon className="h-6 w-6 text-gray-600" />
           </button>
           <div className="flex-1"></div>
-          <div className="text-right">
-            <p className="font-semibold text-accent-dark">{session?.user?.email}</p>
-            <p className="text-xs capitalize text-gray-500">
-                {session?.user?.role?.toLowerCase().replace('_', ' ')}
-            </p>
-          </div>
+          <Link href="/dashboard/profil" className="flex items-center gap-3 transition-opacity hover:opacity-80">
+            <div className="text-right">
+              <p className="font-semibold text-accent-dark text-sm">{session?.user?.email}</p>
+              <p className="text-xs capitalize text-gray-500">
+                  {session?.user?.role?.toLowerCase().replace('_', ' ')}
+              </p>
+            </div>
+            <div className="relative h-10 w-10">
+              {session?.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt="Foto Profil"
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-gray-200 text-gray-500">
+                  <span className="text-lg font-bold">{session?.user?.email?.[0].toUpperCase()}</span>
+                </div>
+              )}
+            </div>
+          </Link>
         </header>
         <main className="flex-1 p-4 sm:p-6">
           {children}

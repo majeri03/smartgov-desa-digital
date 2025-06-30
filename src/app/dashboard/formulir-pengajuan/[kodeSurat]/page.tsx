@@ -171,7 +171,7 @@ export default function FormulirPengajuanPage() {
                     />
                 </div>
               </div>
-          {template.formSchema.map((field) => (
+          {(Array.isArray(template.formSchema) ? template.formSchema : []).map((field) => (
             <div key={field.name}>
               <label htmlFor={field.name} className="mb-2 block text-sm font-medium text-gray-700">{field.label}</label>
               <DynamicFormField field={field} value={formData[field.name]} onChange={handleFormChange} />

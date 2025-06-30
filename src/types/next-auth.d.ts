@@ -17,6 +17,7 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      image?: string | null;
     } & DefaultSession["user"]; // Gabungkan dengan properti user default
   }
 

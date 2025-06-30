@@ -90,6 +90,9 @@ model UserProfile {
   provinsi         String?
   kodePos          String?
 
+  urlTandaTangan   String?   // URL gambar TTD (khusus Kades/pejabat)
+  urlStempel       String?   // URL gambar stempel
+  urlFotoProfil    String?
   // --- Metadata ---
   updatedAt        DateTime          @updatedAt
 }
@@ -206,4 +209,20 @@ model LogAktivitas {
   suratMasuk   SuratMasuk? @relation(fields: [suratMasukId], references: [id])
   
   timestamp   DateTime @default(now())
+}
+
+// Model untuk menyimpan pengaturan global desa
+model PengaturanDesa {
+  id             String    @id @default(cuid())
+  namaDesa       String
+  kecamatan      String
+  kabupaten      String
+  provinsi       String
+  alamatKantor   String
+  teleponKantor  String?
+  emailDesa      String?
+  websiteDesa    String?
+  logoDesaUrl    String?   // URL logo desa
+
+  updatedAt      DateTime  @updatedAt
 }

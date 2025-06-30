@@ -65,14 +65,18 @@ export const authOptions: NextAuthOptions = {
     },
     // Callback ini dipanggil saat sesi diakses oleh client
     async session({ session, token }) {
-      if (session.user) {
-        // Tambahkan id dan role dari token ke objek sesi
-        // agar bisa diakses di komponen client-side
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-      }
-      return session;
+    if (token && session.user) {
+      session.user.id = token.id as string;
+      session.user.role = token.role as string;
+      // Ambil data profil dari database untuk ditambahkan ke sesi
+      const userProfile = await prisma.userProfile.findUnique({
+        where: { userId: token.id as string },
+        select: { urlFotoProfil: true }
+      });
+      session.user.image = userProfile?.urlFotoProfil; // Gunakan 'image' karena ini properti standar
     }
+    return session;
+  }
   },
   pages: {
     signIn: '/login', // Arahkan ke halaman login kustom kita
