@@ -1,45 +1,164 @@
 // src/app/dashboard/status-surat/[id]/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useTransition } from 'react';
 import { useParams } from 'next/navigation';
 import AppLayout from '@/app/components/AppLayout';
-import { StatusSurat, LogAktivitas, User, UserProfile, TemplateSurat } from '@/generated/prisma';
+import { StatusSurat, LogAktivitas, Prisma } from '@/generated/prisma';
 
-// Definisikan tipe data yang lebih spesifik untuk data yang kita terima dari API
-type SuratDetail = {
-  id: string;
-  status: StatusSurat;
-  createdAt: string;
-  template: { namaSurat: string };
-  pemohon: { profile: { namaLengkap: string, nik: string } | null } | null;
-  riwayat: (LogAktivitas & { aktor: { profile: { namaLengkap: string } | null } })[];
-};
+// Tipe data yang lebih spesifik untuk data yang kita terima dari API
+type SuratDetail = Prisma.SuratKeluarGetPayload<{
+  include: {
+    template: { select: { namaSurat: true, persyaratan: true } },
+    pemohon: { select: { profile: { select: { namaLengkap: true, nik: true } } } },
+    riwayat: { orderBy: { timestamp: 'asc' }, include: { aktor: { select: { profile: { select: { namaLengkap: true } } } } } },
+  }
+}>;
 
-// Komponen untuk Progress Tracker visual
-const ProgressTracker = ({ currentStatus }: { currentStatus: StatusSurat }) => {
+// Komponen ProgressTracker (Tidak ada perubahan)
+// Ganti komponen ProgressTracker yang lama dengan yang ini
+const ProgressTracker = ({ currentStatus, allFilesUploaded }: { currentStatus: StatusSurat; allFilesUploaded: boolean }) => {
   const steps = [
-    { status: 'PENDING', label: 'Pengajuan Diterima' },
+    { status: 'MENGISI_BERKAS', label: 'Lengkapi Berkas' },
+    { status: 'PENDING', label: 'Menunggu Verifikasi' },
     { status: 'DIVERIFIKASI', label: 'Diverifikasi Staf' },
     { status: 'DISETUJUI', label: 'Disetujui Kades' },
-    { status: 'SELESAI', label: 'Selesai & Siap Diunduh' },
+    { status: 'SELESAI', label: 'Selesai' },
   ];
 
-  const currentIndex = steps.findIndex(step => step.status === currentStatus);
+  // Fungsi ini kini secara akurat menentukan langkah mana yang SELESAI
+  const getCompletedUptoIndex = () => {
+    const order: StatusSurat[] = ['MENGISI_BERKAS', 'PENDING', 'DIVERIFIKASI', 'DISETUJUI', 'SELESAI'];
+
+    // Jika status MENGISI_BERKAS dan belum semua diunggah, tidak ada yang selesai.
+    if (currentStatus === 'MENGISI_BERKAS' && !allFilesUploaded) {
+      return -1; // -1 berarti tidak ada langkah yang selesai
+    }
+
+    // Jika ditolak, anggap proses berhenti setelah 'Menunggu Verifikasi'
+    if (currentStatus === 'DITOLAK') {
+      return order.indexOf('PENDING');
+    }
+
+    // Untuk status lain, semua langkah hingga status tersebut dianggap selesai.
+    return order.indexOf(currentStatus);
+  };
+
+  const lastCompletedIndex = getCompletedUptoIndex();
 
   return (
-    <div className="w-full">
-      <ol className="relative grid grid-cols-4 items-center text-sm font-medium text-gray-500">
-        {steps.map((step, index) => (
-          <li key={step.status} className="relative text-center">
-            <div className={`absolute -left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 bg-gray-200 ${index <= currentIndex ? 'bg-primary' : ''}`}></div>
-            <div className={`relative mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg ${index <= currentIndex ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
-              ✓
-            </div>
-            <p className={`mt-2 text-xs sm:text-sm ${index <= currentIndex ? 'text-primary font-semibold' : ''}`}>{step.label}</p>
-          </li>
-        ))}
+    <div className="w-full pt-2">
+      <ol className="relative grid grid-cols-5 items-start text-center text-sm font-medium text-gray-500">
+        {steps.map((step, index) => {
+          // Logika visual yang baru dan lebih sederhana
+          const isCompleted = index <= lastCompletedIndex;
+          const isActive = index === lastCompletedIndex + 1;
+
+          return (
+            <li key={step.status} className="relative flex justify-center">
+              {index > 0 && (
+                <div className={`absolute right-1/2 top-4 h-0.5 w-full bg-gray-200 ${isCompleted ? 'bg-primary' : ''}`}></div>
+              )}
+
+              <div className="flex flex-col items-center">
+                <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full font-bold transition-colors ${
+                    isCompleted ? 'bg-primary text-white'
+                    : isActive ? 'border-2 border-primary bg-white text-primary'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {isCompleted ? '✓' : index + 1}
+                </div>
+                <p className={`mt-2 text-center text-xs sm:text-sm ${isActive || isCompleted ? 'font-semibold text-primary' : 'font-medium text-gray-500'}`}>
+                  {step.label}
+                </p>
+              </div>
+            </li>
+          );
+        })}
       </ol>
+    </div>
+  );
+};
+
+// Komponen FileUploader yang baru
+// Buat komponen baru ini untuk menggantikan FileUploader
+const RequirementUploader = ({ suratId, requirement, uploadedFile, onUploadSuccess }: { suratId: string, requirement: string, uploadedFile: string | undefined, onUploadSuccess: () => void }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (selectedFile.size > 5 * 1024 * 1024) { // Maks 5MB
+        setError('Ukuran file maks 5MB.');
+        return;
+      }
+      setFile(selectedFile);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      // Memberi nama file yang konsisten di backend: NAMA_PERSYARATAN.extensi
+      const cleanFileName = requirement.replace(/\s/g, '_') + '.' + file.name.split('.').pop();
+
+      const urlResponse = await fetch('/api/surat/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: cleanFileName, fileType: file.type, suratId }),
+      });
+      if (!urlResponse.ok) throw new Error('Gagal mendapatkan izin unggah.');
+      const { signedUrl, filePath } = await urlResponse.json();
+
+      const uploadResponse = await fetch(signedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!uploadResponse.ok) throw new Error('Proses unggah gagal.');
+
+      const recordResponse = await fetch('/api/surat/berkas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suratId, filePath }),
+      });
+      if (!recordResponse.ok) throw new Error('Gagal mencatat berkas.');
+
+      alert(`Berkas "${requirement}" berhasil diunggah!`);
+      onUploadSuccess(); // Refresh data halaman
+      setFile(null); // Reset input file
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Jika file sudah diunggah, tampilkan status sukses
+  if (uploadedFile) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3">
+        <p className="text-sm font-medium text-green-800">{requirement}</p>
+        <span className="text-sm font-bold text-green-800">✓ Berhasil Diunggah</span>
+      </div>
+    );
+  }
+
+  // Jika belum, tampilkan form uploader-nya
+  return (
+    <div className="rounded-lg border p-3 transition-all hover:border-gray-300">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="flex-1 font-medium text-gray-800">{requirement}</p>
+        <div className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <input type="file" accept="image/png, image/jpeg, application/pdf" onChange={handleFileChange} className="w-full cursor-pointer text-xs file:mr-2 file:cursor-pointer file:rounded-full file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:font-semibold hover:file:bg-gray-200"/>
+          <button onClick={handleUpload} disabled={!file || isUploading} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:w-auto disabled:cursor-not-allowed disabled:bg-primary/50">
+            {isUploading ? '...' : 'Unggah'}
+          </button>
+        </div>
+      </div>
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+      <p className="mt-2 text-xs text-gray-400">Tipe file: JPG, PNG, atau PDF. Ukuran maks: 5MB.</p>
     </div>
   );
 };
@@ -48,41 +167,68 @@ const ProgressTracker = ({ currentStatus }: { currentStatus: StatusSurat }) => {
 export default function StatusSuratDetailPage() {
   const params = useParams();
   const id = params.id as string;
-
   const [surat, setSurat] = useState<SuratDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, startTransition] = useTransition();
+
+  const fetchSuratDetail = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/surat/pengajuan/${id}`);
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.message || 'Gagal memuat detail surat.');
+      }
+      const data = await response.json();
+      setSurat(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    const fetchSuratDetail = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`/api/surat/pengajuan/${id}`);
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.message || 'Gagal memuat detail surat.');
-        }
-        const data = await response.json();
-        setSurat(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchSuratDetail();
-  }, [id]);
+  }, [fetchSuratDetail]);
+
+  const handleAjukanVerifikasi = async () => {
+  if (!surat) return;
+  const confirmation = confirm('Apakah Anda yakin semua berkas yang diunggah sudah benar? Setelah diajukan, Anda tidak dapat mengubahnya lagi.');
+  if (!confirmation) return;
+
+  startTransition(async () => {
+  try {
+    const response = await fetch('/api/surat/ajukan-verifikasi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suratId: surat.id }),
+    });
+    if (!response.ok) throw new Error('Gagal mengajukan verifikasi.');
+    alert('Pengajuan Anda berhasil dikirim untuk diverifikasi oleh staf desa.');
+    fetchSuratDetail(); // Refresh halaman
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  })
+  };
 
   const renderContent = () => {
     if (isLoading) return <p>Memuat detail status surat...</p>;
     if (error) return <p className="text-red-500">Error: {error}</p>;
     if (!surat) return <p>Data pengajuan tidak ditemukan.</p>;
+    const allFilesUploaded =
+      (surat.filePersyaratan?.length ?? 0) >= surat.template.persyaratan.length;
 
+    // Override UI‐status: jangan tampilkan PENDING sebelum semua file ter‐upload
+    const uiStatus: StatusSurat =
+      surat.status === 'PENDING' && !allFilesUploaded
+        ? 'MENGISI_BERKAS'
+        : surat.status;
     return (
-      <div className="space-y-8">
-        {/* Bagian Status Utama */}
+      <div className="space-y-6 sm:space-y-8">
         <div className="rounded-lg border bg-white p-4 shadow-sm sm:p-6">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <div>
@@ -95,17 +241,66 @@ export default function StatusSuratDetailPage() {
             </div>
           </div>
           <div className="mt-6">
-            <ProgressTracker currentStatus={surat.status} />
+            <ProgressTracker 
+              currentStatus={uiStatus}
+              allFilesUploaded={surat.template.persyaratan.length === surat.filePersyaratan?.length}
+            />
           </div>
         </div>
-
-        {/* Bagian Riwayat/Log Aktivitas */}
+        
+        {uiStatus === 'MENGISI_BERKAS' && (
+          <div className="rounded-lg border bg-white p-4 shadow-sm sm:p-6">
+            <h3 className="text-md font-bold text-accent-dark sm:text-lg">Unggah Berkas Persyaratan</h3>
+            <p className="mt-1 text-sm text-gray-500">Silakan unggah semua berkas yang dibutuhkan satu per satu.</p>
+            <div className="mt-4 space-y-3">
+              {surat.template.persyaratan.map((syarat) => {
+                // Cek apakah file untuk syarat ini sudah ada di database
+                const uploadedFile = surat.filePersyaratan?.find(file => 
+                  file.includes(syarat.replace(/\s/g, '_'))
+                );
+                return (
+                  <RequirementUploader
+                    key={syarat}
+                    suratId={surat.id}
+                    requirement={syarat}
+                    uploadedFile={uploadedFile}
+                    onUploadSuccess={fetchSuratDetail}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* Sisipkan kode ini di antara blok "Unggah Berkas" dan "Riwayat Proses" */}
+          {uiStatus === 'MENGISI_BERKAS' && allFilesUploaded && (
+          <div className="mt-6 rounded-lg border bg-white p-4 shadow-sm">
+            <h3 className="font-bold text-accent-dark">Semua Berkas Lengkap</h3>
+            <p className="mt-1 text-sm text-gray-600">Anda telah mengunggah semua berkas yang diperlukan. Silakan ajukan untuk diverifikasi oleh staf desa.</p>
+            <button
+              onClick={handleAjukanVerifikasi}
+              disabled={isSubmitting}
+              className="mt-4 w-full rounded-lg bg-green-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-400"
+            >
+              {isSubmitting ? 'Mengajukan...' : 'Ajukan Verifikasi Sekarang'}
+            </button>
+          </div>
+        )}
+        {uiStatus === 'PENDING' && (
+        <div className="rounded-lg border bg-white p-4 shadow-sm sm:p-6">
+          <h3 className="text-md font-bold text-accent-dark sm:text-lg">
+            Menunggu Verifikasi
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Berkas Anda sedang diperiksa oleh staf desa.
+          </p>
+        </div>
+      )}
         <div className="rounded-lg border bg-white p-4 shadow-sm sm:p-6">
           <h3 className="text-md font-bold text-accent-dark sm:text-lg">Riwayat Proses Pengajuan</h3>
           <ul className="mt-4 space-y-4">
             {surat.riwayat.map(log => (
               <li key={log.id} className="flex gap-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white">✓</div>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white">✓</div>
                 <div>
                   <p className="font-semibold text-gray-800">{log.aksi.replace('_', ' ')}</p>
                   <p className="text-sm text-gray-500">{log.deskripsi}</p>

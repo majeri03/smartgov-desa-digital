@@ -37,28 +37,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setIsSidebarOpen(false);
   }, [pathname]);
 
-  if (status === 'loading') {
-    return <div className="flex h-screen items-center justify-center bg-secondary-off">Memuat Sesi...</div>;
-  }
-
+  useEffect(() => {
+  // Efek untuk menangani redirect jika tidak terotentikasi
   if (status === 'unauthenticated') {
     router.replace('/login');
-    return null;
   }
-
-  // --- Daftar Navigasi Lengkap (Sesuai kode asli Anda) ---
-  const navItems: NavItem[] = [
-    { href: '/dashboard', label: 'Utama' },
-    { href: '/dashboard/jenis-surat', label: 'Ajukan Surat Baru' }, // Label diubah agar lebih jelas
-    { href: '/dashboard/status-surat', label: 'Lacak Pengajuan Saya' }, // Mengarah ke halaman daftar, bukan detail
-  ];
+  }, [status, router]);
   
-  // --- Logika Peran (Sesuai kode asli Anda) ---
-  if (session?.user.role === 'STAF' || session?.user.role === 'KEPALA_DESA') {
-      navItems.push({ href: '/dashboard/admin', label: 'Admin' }); // Label disesuaikan dengan kode asli
-  }
+  // --- Daftar Navigasi Lengkap (Sesuai kode asli Anda) ---
+  let navItems: NavItem[] = [];
+const userRole = session?.user.role;
+
+if (userRole === 'WARGA') {
+  navItems = [
+    { href: '/dashboard', label: 'Utama' },
+    { href: '/dashboard/jenis-surat', label: 'Ajukan Surat Baru' },
+    { href: '/dashboard/status-surat', label: 'Lacak Pengajuan Saya' },
+  ];
+} else if (userRole === 'STAF') {
+  navItems = [
+    { href: '/dashboard/admin', label: 'Dasbor Verifikasi' },
+  ];
+} else if (userRole === 'KEPALA_DESA') {
+  navItems = [
+    { href: '/dashboard/kepala-desa/persetujuan', label: 'Dasbor Persetujuan' },
+  ];
+}
 
   return (
+    <>
+    {status === 'authenticated' ? (
     <div className="flex min-h-screen bg-secondary-off">
       {/* --- Sidebar (Kini sepenuhnya responsif) --- */}
       <aside className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-primary text-secondary transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
@@ -120,5 +128,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+      ) : (
+    // TAMPILAN JIKA LOADING ATAU BELUM LOGIN (menunggu redirect)
+    <div className="flex h-screen items-center justify-center bg-secondary-off">
+      Memuat Sesi...
+    </div>
+  )}
+</>
   );
 }

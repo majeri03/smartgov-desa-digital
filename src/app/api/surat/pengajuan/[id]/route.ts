@@ -15,7 +15,7 @@ export async function GET(
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = params;
+  const id = params.id;
   if (!id) {
     return NextResponse.json({ message: 'ID Pengajuan diperlukan.' }, { status: 400 });
   }
@@ -25,7 +25,8 @@ export async function GET(
       where: { id },
       include: {
         template: {
-          select: { namaSurat: true },
+          select: { namaSurat: true,
+          persyaratan: true, },
         },
         pemohon: {
           select: { profile: { select: { namaLengkap: true, nik: true } } },
