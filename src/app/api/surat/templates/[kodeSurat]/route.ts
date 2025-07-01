@@ -10,6 +10,7 @@ export async function GET(
   request: Request,
   { params }: { params: { kodeSurat: string } }
 ) {
+  
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });

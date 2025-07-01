@@ -11,13 +11,13 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const { id } = params;
   const session = await getServerSession(authOptions);
   if (session?.user.role !== Role.KEPALA_DESA) {
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
   }
 
   try {
-    const { id } = params; // Ekstrak id di sini
     const surat = await prisma.suratKeluar.findFirst({
     where: { 
         id: id, // Gunakan variabel id

@@ -14,15 +14,15 @@ export async function GET(
   if (!session?.user?.id) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
+  const { id } = params;
 
-  const id = params.id;
   if (!id) {
     return NextResponse.json({ message: 'ID Pengajuan diperlukan.' }, { status: 400 });
   }
 
   try {
     const surat = await prisma.suratKeluar.findUnique({
-      where: { id },
+      where: { id: id },
       include: {
         template: {
           select: { namaSurat: true,

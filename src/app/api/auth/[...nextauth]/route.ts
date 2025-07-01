@@ -68,12 +68,26 @@ export const authOptions: NextAuthOptions = {
     if (token && session.user) {
       session.user.id = token.id as string;
       session.user.role = token.role as string;
-      // Ambil data profil dari database untuk ditambahkan ke sesi
+
+      // Ambil SEMUA data profil yang relevan sekali jalan
       const userProfile = await prisma.userProfile.findUnique({
         where: { userId: token.id as string },
-        select: { urlFotoProfil: true }
+        select: { 
+          namaLengkap: true,
+          nik: true,
+          urlFotoProfil: true,
+          urlTandaTangan: true,
+          urlStempel: true,
+        }
       });
-      session.user.image = userProfile?.urlFotoProfil; // Gunakan 'image' karena ini properti standar
+
+      if (userProfile) {
+        session.user.namaLengkap = userProfile.namaLengkap;
+        session.user.nik = userProfile.nik;
+        session.user.image = userProfile.urlFotoProfil; // Untuk avatar
+        session.user.urlTandaTangan = userProfile.urlTandaTangan;
+        session.user.urlStempel = userProfile.urlStempel;
+      }
     }
     return session;
   }

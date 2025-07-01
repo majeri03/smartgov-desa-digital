@@ -18,6 +18,7 @@ interface Pengajuan {
 // Komponen Kartu untuk setiap item pengajuan (lebih responsif daripada tabel)
 const PengajuanCard = ({ pengajuan }: { pengajuan: Pengajuan }) => {
   const statusColors: { [key in StatusSurat]: string } = {
+    MENGISI_BERKAS: 'bg-gray-100 text-gray-800',
     PENDING: 'bg-yellow-100 text-yellow-800',
     DIVERIFIKASI: 'bg-blue-100 text-blue-800',
     DISETUJUI: 'bg-green-100 text-green-800',

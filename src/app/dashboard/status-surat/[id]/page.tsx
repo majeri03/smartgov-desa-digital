@@ -5,11 +5,12 @@ import { useEffect, useState, useCallback, useTransition } from 'react';
 import { useParams } from 'next/navigation';
 import AppLayout from '@/app/components/AppLayout';
 import { StatusSurat, LogAktivitas, Prisma } from '@/generated/prisma';
+import html2pdf from 'html2pdf.js';
 
 // Tipe data yang lebih spesifik untuk data yang kita terima dari API
 type SuratDetail = Prisma.SuratKeluarGetPayload<{
   include: {
-    template: { select: { namaSurat: true, persyaratan: true } },
+    template: { select: { namaSurat: true, persyaratan: true,  kodeSurat: true} },
     pemohon: { select: { profile: { select: { namaLengkap: true, nik: true } } } },
     riwayat: { orderBy: { timestamp: 'asc' }, include: { aktor: { select: { profile: { select: { namaLengkap: true } } } } } },
   }
@@ -31,8 +32,12 @@ const ProgressTracker = ({ currentStatus, allFilesUploaded }: { currentStatus: S
     const order: StatusSurat[] = ['MENGISI_BERKAS', 'PENDING', 'DIVERIFIKASI', 'DISETUJUI', 'SELESAI'];
 
     // Jika status MENGISI_BERKAS dan belum semua diunggah, tidak ada yang selesai.
+    if (currentStatus === 'DISETUJUI' || currentStatus === 'SELESAI') {
+    return order.length - 1; // Selalu tandai sampai langkah terakhir
+    }
+
     if (currentStatus === 'MENGISI_BERKAS' && !allFilesUploaded) {
-      return -1; // -1 berarti tidak ada langkah yang selesai
+      return -1;
     }
 
     // Jika ditolak, anggap proses berhenti setelah 'Menunggu Verifikasi'
@@ -218,6 +223,41 @@ export default function StatusSuratDetailPage() {
   })
   };
 
+  const handleDownload = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+        const response = await fetch(`/api/surat/unduh/${id}`);
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.message || 'Gagal mengambil data surat.');
+        }
+        const { html, fileName } = await response.json();
+
+        // html2pdf.js bekerja paling baik dengan elemen DOM, bukan string
+        const element = document.createElement('div');
+        element.innerHTML = html;
+        document.body.appendChild(element); // Tambahkan sementara ke DOM
+
+        const opt = {
+            margin:       0,
+            filename:     fileName,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        await html2pdf().from(element).set(opt).save();
+
+        document.body.removeChild(element); // Hapus elemen setelah selesai
+    } catch (err: any) {
+        setError(err.message);
+        alert(`Error: ${err.message}`);
+    } finally {
+        setIsLoading(false);
+    }
+};
+
   const renderContent = () => {
     if (isLoading) return <p>Memuat detail status surat...</p>;
     if (error) return <p className="text-red-500">Error: {error}</p>;
@@ -255,13 +295,13 @@ export default function StatusSuratDetailPage() {
           <div className="rounded-lg border bg-green-50 p-4 text-center shadow-sm sm:p-6">
             <h3 className="text-lg font-bold text-green-800">Dokumen Anda Telah Terbit!</h3>
             <p className="mt-2 text-sm text-green-700">Surat resmi Anda telah disetujui dan siap untuk diunduh atau diambil di kantor desa.</p>
-            <a 
-              href={`/api/surat/unduh/${surat.id}`} 
-              download
-              className="mt-4 inline-block w-full rounded-lg bg-green-600 px-6 py-3 text-center font-semibold text-white shadow-md hover:bg-green-700 sm:w-auto"
+            <button
+              onClick={handleDownload}
+              disabled={isLoading}
+              className="..."
             >
-              Unduh Surat Digital (.pdf)
-            </a>
+              {isLoading ? 'Mempersiapkan...' : 'Unduh Surat Digital (.pdf)'}
+            </button>
           </div>
         )}
         {uiStatus === 'MENGISI_BERKAS' && (

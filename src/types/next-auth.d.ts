@@ -17,6 +17,10 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      namaLengkap?: string | null;
+      nik?: string | null;
+      urlTandaTangan?: string | null;
+      urlStempel?: string | null;
       image?: string | null;
     } & DefaultSession["user"]; // Gabungkan dengan properti user default
   }
@@ -24,5 +28,9 @@ declare module "next-auth" {
   // Anda juga bisa memperluas tipe User jika diperlukan di tempat lain
   interface User extends DefaultUser {
       role: Role;
+      namaLengkap?: string | null;
+      nik?: string | null;
+      urlTandaTangan?: string | null;
+      urlStempel?: string | null;
   }
 }

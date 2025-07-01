@@ -11,17 +11,37 @@ interface TemplateFormProps {
   isEditMode: boolean;
 }
 
+interface FormField {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date';
+  placeholder?: string;
+}
+
 export default function TemplateForm({ initialData, isEditMode }: TemplateFormProps) {
   const [namaSurat, setNamaSurat] = useState('');
   const [kodeSurat, setKodeSurat] = useState('');
   const [deskripsi, setDeskripsi] = useState('');
   const [persyaratan, setPersyaratan] = useState('');
   const [templateHtml, setTemplateHtml] = useState('<p>Ketik isi surat di sini...</p>');
+  const [formSchema, setFormSchema] = useState<FormField[]>([]);
   const [isActive, setIsActive] = useState(true);
 
   const [isSaving, startTransition] = useTransition();
   const router = useRouter();
+  const handleSchemaChange = (index: number, fieldName: keyof FormField, value: string) => {
+  const updatedSchema = [...formSchema];
+  updatedSchema[index] = { ...updatedSchema[index], [fieldName]: value };
+  setFormSchema(updatedSchema);
+  };
 
+  const addSchemaField = () => {
+    setFormSchema([...formSchema, { name: '', label: '', type: 'text', placeholder: '' }]);
+  };
+
+  const removeSchemaField = (index: number) => {
+    setFormSchema(formSchema.filter((_, i) => i !== index));
+  };
   useEffect(() => {
     if (isEditMode && initialData) {
       setNamaSurat(initialData.namaSurat);
@@ -29,6 +49,11 @@ export default function TemplateForm({ initialData, isEditMode }: TemplateFormPr
       setDeskripsi(initialData.deskripsi || '');
       setPersyaratan((initialData.persyaratan || []).join('\n'));
       setTemplateHtml(initialData.templateHtml);
+      if (initialData.formSchema && typeof initialData.formSchema === 'object') {
+      setFormSchema(initialData.formSchema as unknown as FormField[]);
+      } else {
+        setFormSchema([]);
+      }
       setIsActive(initialData.isActive);
     }
   }, [initialData, isEditMode]);
@@ -49,7 +74,7 @@ export default function TemplateForm({ initialData, isEditMode }: TemplateFormPr
             deskripsi,
             persyaratan: persyaratan.split('\n').filter(p => p.trim() !== ''),
             templateHtml,
-            formSchema: [],
+            formSchema: formSchema,
             isActive,
           }),
         });
@@ -86,6 +111,57 @@ export default function TemplateForm({ initialData, isEditMode }: TemplateFormPr
       <div>
         <label htmlFor="persyaratan" className="block text-sm font-medium text-gray-700">Persyaratan (satu per baris)</label>
         <textarea id="persyaratan" value={persyaratan} onChange={(e) => setPersyaratan(e.target.value)} rows={4} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="Contoh:&#10;Fotokopi KTP&#10;Fotokopi KK"></textarea>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Isian Formulir Tambahan</label>
+        <p className="mt-1 text-xs text-gray-500">
+          Buat formulir dinamis yang akan diisi warga. Pastikan 'Nama Unik Field' tidak menggunakan spasi (gunakan `_`).
+        </p>
+        <div className="mt-4 space-y-4 rounded-lg border bg-gray-50 p-4">
+          {formSchema.map((field, index) => (
+            <div key={index} className="grid grid-cols-1 gap-4 border-b pb-4 sm:grid-cols-2 md:grid-cols-4 md:gap-x-6">
+              {/* Kolom 1: Nama Unik & Label */}
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Nama Unik Field</label>
+                  <input type="text" value={field.name} onChange={(e) => handleSchemaChange(index, 'name', e.target.value)} placeholder="cth: nama_usaha" className="w-full text-sm rounded-md border-gray-300 shadow-sm" required />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Label untuk Warga</label>
+                  <input type="text" value={field.label} onChange={(e) => handleSchemaChange(index, 'label', e.target.value)} placeholder="cth: Nama Usaha Anda" className="w-full text-sm rounded-md border-gray-300 shadow-sm" required />
+                </div>
+              </div>
+              {/* Kolom 2: Tipe & Placeholder */}
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Tipe Field</label>
+                  <select value={field.type} onChange={(e) => handleSchemaChange(index, 'type', e.target.value)} className="w-full text-sm rounded-md border-gray-300 shadow-sm">
+                    <option value="text">Teks Singkat</option>
+                    <option value="textarea">Teks Panjang</option>
+                    <option value="number">Angka</option>
+                    <option value="date">Tanggal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Placeholder (Opsional)</label>
+                  <input type="text" value={field.placeholder || ''} onChange={(e) => handleSchemaChange(index, 'placeholder', e.target.value)} placeholder="Teks bantuan di dalam input" className="w-full text-sm rounded-md border-gray-300 shadow-sm" />
+                </div>
+              </div>
+              {/* Kolom Aksi */}
+              <div className="flex items-center justify-end pt-5 sm:col-span-2 md:col-span-2">
+                  <button type="button" onClick={() => removeSchemaField(index)} className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-100">
+                      Hapus
+                  </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="mt-4">
+            <button type="button" onClick={addSchemaField} className="w-full rounded-lg border-2 border-dashed border-gray-300 bg-white px-6 py-2.5 font-semibold text-gray-700 shadow-sm hover:border-primary hover:text-primary">
+              + Tambah Field Formulir
+            </button>
+          </div>
+        </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700">Isi Konten Template Surat</label>

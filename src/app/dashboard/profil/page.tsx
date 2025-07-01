@@ -1,26 +1,38 @@
 // src/app/dashboard/profil/page.tsx
 'use client';
 
-import { useEffect, useState,useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import AppLayout from '@/app/components/AppLayout';
-import { Prisma, Role } from '@/generated/prisma';
+import { Role } from '@/generated/prisma';
 
-type UserProfilePayload = Prisma.UserProfileGetPayload<{
-  include: { user: true }
-}>;
-
-// Kita bisa gunakan kembali komponen uploader dengan sedikit modifikasi
+// Kita bisa gunakan kembali komponen uploader yang lama dengan sedikit modifikasi
 const AssetUploader = ({ label, assetType, currentAssetUrl, onUploadComplete }: { label: string, assetType: 'tandatangan' | 'stempel' | 'fotoprofil', currentAssetUrl?: string | null, onUploadComplete: (assetType: string, filePath: string) => void }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    
+    // Logika untuk menampilkan gambar yang sudah ada atau yang baru dipilih
+    const displayUrl = previewUrl || currentAssetUrl;
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = e.target.files?.[0];
+      if (selectedFile) {
+        if (selectedFile.size > 2 * 1024 * 1024) { // Batas 2MB
+          alert('Ukuran file terlalu besar (maks 2MB).');
+          return;
+        }
+        setFile(selectedFile);
+        setPreviewUrl(URL.createObjectURL(selectedFile));
+        setError(null);
+      }
+    };
+
     const handleUpload = async () => {
         if (!file) return;
         setIsUploading(true);
         setError(null);
-        setPreviewUrl(null)
         try {
             const cleanFileName = `${assetType}-${Date.now()}.${file.name.split('.').pop()}`;
             const urlResponse = await fetch('/api/surat/upload-url', {
@@ -36,115 +48,82 @@ const AssetUploader = ({ label, assetType, currentAssetUrl, onUploadComplete }: 
 
             onUploadComplete(assetType, filePath);
             setFile(null);
-            setPreviewUrl(null)
+            URL.revokeObjectURL(previewUrl!);
+            setPreviewUrl(null);
         } catch (err: any) {
             setError(err.message);
         } finally {
             setIsUploading(false);
         }
     };
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (selectedFile.size > 2 * 1024 * 1024) { // Batas 2MB untuk aset
-        alert('Ukuran file terlalu besar (maks 2MB).');
-        return;
-      }
-      setFile(selectedFile);
-      // Membuat URL sementara untuk preview di browser
-      setPreviewUrl(URL.createObjectURL(selectedFile));
-      setError(null);
-    }
-  };
-      const handleCancel = () => {
+
+    const handleCancel = () => {
       setFile(null);
-      setPreviewUrl(null); // Hapus juga URL preview-nya
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
       setError(null);
-      // Jika Anda menggunakan <input type="file">, Anda mungkin perlu mereset nilainya
-      // const input = document.getElementById(`file-input-${assetType}`) as HTMLInputElement;
-      // if (input) input.value = '';
     };
-  // Di dalam komponen AssetUploader
-return (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <div className="mt-2 flex flex-col items-start gap-3">
-      {!file ? (
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700">{label}</label>
+        <div className="mt-2 flex flex-col items-start gap-3">
+          {displayUrl && (
+            <div className="w-full h-32 border rounded-md p-1">
+              <img src={displayUrl} alt="Preview Aset" className="w-full h-full object-contain" />
+            </div>
+          )}
+          
           <input type="file" accept="image/png, image/jpeg" onChange={handleFileChange} className="text-sm file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:font-semibold hover:file:bg-gray-200"/>
-      ) : (
-        <div className="flex w-full items-center gap-3">
-           {/* Logika Prioritas: Tampilkan preview, jika tidak ada, tampilkan yang sudah tersimpan */}
-  {previewUrl ? (
-    <img src={previewUrl} alt="Preview" className="h-full w-full object-contain p-1" />
-  ) : currentAssetUrl ? (
-    <img src={currentAssetUrl} alt="Aset Tersimpan" className="h-full w-full object-contain p-1" />
-  ) : (
-    <span className="text-xs text-gray-400">Belum Ada Gambar</span>
-  )}
-            <span className="flex-1 truncate text-sm text-gray-700" title={file.name}>{file.name}</span>
-            <button onClick={handleUpload} disabled={isUploading} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
-              {isUploading ? 'Menyimpan...' : 'Simpan Perubahan'}
-            </button>
-            <button onClick={handleCancel} disabled={isUploading} className="shrink-0 text-xs font-medium text-red-600 hover:underline disabled:opacity-50">
-              Batal
-            </button>
+
+          {file && (
+            <div className="flex w-full items-center gap-3">
+                <span className="flex-1 truncate text-sm text-gray-700" title={file.name}>{file.name}</span>
+                <button onClick={handleUpload} disabled={isUploading} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                  {isUploading ? 'Menyimpan...' : 'Simpan'}
+                </button>
+                <button onClick={handleCancel} disabled={isUploading} className="shrink-0 text-xs font-medium text-red-600 hover:underline disabled:opacity-50">
+                  Batal
+                </button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-    {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-  </div>
-);
+        {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+      </div>
+    );
 };
 
 export default function ProfilPage() {
-  const { data: session } = useSession();
-  const [profile, setProfile] = useState<UserProfilePayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [ttdPreviewUrl, setTtdPreviewUrl] = useState<string | null>(null);
-  const [stempelPreviewUrl, setStempelPreviewUrl] = useState<string | null>(null);
-  const fetchProfile = useCallback(async () => {
-    if (!session) return;
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/users/profile');
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data ? { ...data, user: session.user } : null);
-      }
-    } catch (error) {
-      console.error("Failed to fetch profile", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session]);
-  
-  useEffect(() => {
-  fetchProfile();
-}, [fetchProfile]); // Sekarang kita bergantung pada fungsi fetchProfile itu sendiri
+  const { data: session, status, update: updateSession } = useSession();
+  const [ttdUrl, setTtdUrl] = useState<string | null>(null);
+  const [stempelUrl, setStempelUrl] = useState<string | null>(null);
 
-  // Pastikan useEffect ini ada di dalam ProfilPage
-  useEffect(() => {
-  const getSignedUrl = async (filePath: string) => {
-    const res = await fetch('/api/admin/berkas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filePath }),
-    });
-    if (!res.ok) return null;
-    const { signedUrl } = await res.json();
-    return signedUrl;
+  // Fungsi untuk mendapatkan signed URL yang aman untuk ditampilkan
+  const getSignedUrl = async (filePath: string, setter: (url: string | null) => void) => {
+    try {
+        const res = await fetch('/api/admin/berkas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath }),
+        });
+        if (!res.ok) { setter(null); return; }
+        const { signedUrl } = await res.json();
+        setter(signedUrl);
+    } catch {
+        setter(null);
+    }
   };
 
-  if (profile?.urlTandaTangan) {
-    getSignedUrl(profile.urlTandaTangan).then(url => setTtdPreviewUrl(url));
-  }
-  if (profile?.urlStempel) {
-    getSignedUrl(profile.urlStempel).then(url => setStempelPreviewUrl(url));
-  }
-}, [profile]);
+  useEffect(() => {
+    if (session?.user.urlTandaTangan) {
+        getSignedUrl(session.user.urlTandaTangan, setTtdUrl);
+    }
+    if (session?.user.urlStempel) {
+        getSignedUrl(session.user.urlStempel, setStempelUrl);
+    }
+  }, [session]);
 
-  
-    const handleAssetUpdate = async (assetType: string, filePath: string) => {
+  const handleAssetUpdate = async (assetType: string, filePath: string) => {
     try {
         const body = assetType === 'tandatangan' ? { urlTandaTangan: filePath } 
                   : assetType === 'stempel' ? { urlStempel: filePath }
@@ -158,16 +137,17 @@ export default function ProfilPage() {
         if (!response.ok) throw new Error('Gagal menyimpan aset.');
 
         alert('Aset berhasil diperbarui!');
-
-        // Paksa pengambilan ulang data profil untuk memicu semua pembaruan
-        fetchProfile();
+        
+        // Memaksa sesi untuk memuat ulang datanya dari backend
+        await updateSession();
 
     } catch (error: any) {
         alert(`Gagal menyimpan aset: ${error.message}`);
     }
   };
 
-  if (isLoading) return <AppLayout><p>Memuat profil...</p></AppLayout>;
+  if (status === 'loading') return <AppLayout><p>Memuat profil...</p></AppLayout>;
+  if (!session) return <AppLayout><p>Sesi tidak ditemukan.</p></AppLayout>
 
   return (
     <AppLayout>
@@ -175,42 +155,29 @@ export default function ProfilPage() {
       <div className="space-y-8 rounded-lg border bg-white p-4 shadow-sm sm:p-6">
         <div>
           <h3 className="text-lg font-bold text-gray-900">Informasi Akun</h3>
-          <p className="mt-2 text-md text-gray-700"><strong>Nama:</strong> {profile?.namaLengkap}</p>
-          <p className="text-md text-gray-700"><strong>NIK:</strong> {profile?.nik}</p>
-          <p className="text-md text-gray-700"><strong>Email:</strong> {profile?.user?.email}</p>
-          <p className="text-md text-gray-700"><strong>Peran:</strong> {profile?.user?.role}</p>
+          <p className="mt-2 text-md text-gray-700"><strong>Nama:</strong> {session.user.namaLengkap}</p>
+          <p className="text-md text-gray-700"><strong>NIK:</strong> {session.user.nik}</p>
+          <p className="text-md text-gray-700"><strong>Email:</strong> {session.user.email}</p>
+          <p className="text-md text-gray-700"><strong>Peran:</strong> {session.user.role}</p>
         </div>
 
-        {session?.user.role === Role.KEPALA_DESA && (
+        {session.user.role === Role.KEPALA_DESA && (
           <div className="space-y-6 rounded-lg border bg-white p-4 shadow-sm sm:p-6">
             <h3 className="text-lg font-bold text-gray-900">Manajemen Aset Digital (Khusus Kepala Desa)</h3>
-             <div className='mt-4 space-y-8'>
-  {/* --- Kelompok untuk Tanda Tangan --- */}
-  <div>
-    <h4 className="text-md font-semibold text-gray-800">Gambar Tanda Tangan</h4>
-    <div className="mt-2">
-      <AssetUploader 
-        label="Ubah Tanda Tangan" 
-        assetType="tandatangan" 
-        currentAssetUrl={ttdPreviewUrl} 
-        onUploadComplete={handleAssetUpdate} 
-      />
-    </div>
-  </div>
-
-  {/* --- Kelompok untuk Stempel --- */}
-  <div>
-    <h4 className="text-md font-semibold text-gray-800">Gambar Stempel</h4>
-    <div className="mt-2">
-      <AssetUploader 
-        label="Ubah Stempel" 
-        assetType="stempel" 
-        currentAssetUrl={stempelPreviewUrl} 
-        onUploadComplete={handleAssetUpdate} 
-      />
-    </div>
-  </div>
-</div>
+            <div className='mt-4 grid grid-cols-1 md:grid-cols-2 gap-8'>
+              <AssetUploader 
+                label="Gambar Tanda Tangan" 
+                assetType="tandatangan" 
+                currentAssetUrl={ttdUrl} 
+                onUploadComplete={handleAssetUpdate} 
+              />
+              <AssetUploader 
+                label="Gambar Stempel" 
+                assetType="stempel" 
+                currentAssetUrl={stempelUrl} 
+                onUploadComplete={handleAssetUpdate} 
+              />
+            </div>
           </div>
         )}
       </div>

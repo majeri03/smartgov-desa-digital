@@ -11,6 +11,7 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const { id } = params;
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
@@ -18,7 +19,7 @@ export async function GET(
 
   try {
     const surat = await prisma.suratKeluar.findUnique({
-      where: { id: params.id },
+      where: { id: id }, 
       include: {
         template: true,
         pemohon: { include: { profile: true } },

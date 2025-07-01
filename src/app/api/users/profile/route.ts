@@ -22,6 +22,9 @@ export async function GET(request: Request) {
         nik: true,
         nomorTelepon: true,
         alamatKTP: true,
+        urlTandaTangan: true, // Tambahkan baris ini
+        urlStempel: true,     // Tambahkan baris ini
+        urlFotoProfil: true,
         // Tambahkan field lain yang mungkin relevan untuk pra-isi
       },
     });
