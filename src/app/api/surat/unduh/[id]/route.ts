@@ -1,130 +1,211 @@
+// src/app/api/surat/unduh/[id]/route.ts (Versi Final dengan Perbaikan Encoding)
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@/generated/prisma';
-import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../auth/[...nextauth]/route';
+import { getServerSession } from 'next-auth/next';
+import { PDFDocument, rgb, StandardFonts, PageSizes, PDFFont } from 'pdf-lib';
 import { createClient } from '@supabase/supabase-js';
 
 const prisma = new PrismaClient();
-
-// Inisialisasi Supabase dengan kunci service role untuk akses di server
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-// Fungsi ini sekarang berjalan di server dan mengambil gambar langsung dari Supabase
-const fetchImageAsBase64 = async (filePath: string | null): Promise<string | null> => {
+async function fetchImage(filePath: string | null): Promise<Uint8Array | null> {
     if (!filePath) return null;
     try {
         const { data, error } = await supabaseAdmin.storage
-            .from('berkas-persyaratan') // Pastikan nama bucket ini benar
+            .from('berkas-persyaratan')
             .download(filePath);
-
-        if (error || !data) {
-            throw new Error(`Gagal mengunduh file dari Supabase: ${error?.message || 'File tidak ditemukan'}`);
+        if (error) {
+            console.error(`Supabase download error for ${filePath}:`, error.message);
+            return null;
         }
-
-        const buffer = await data.arrayBuffer();
-        const contentType = data.type || 'image/png';
-        const base64 = Buffer.from(buffer).toString('base64');
-        return `data:${contentType};base64,${base64}`;
-    } catch (err) {
-        console.error(`Gagal mengambil gambar dari Supabase: ${filePath}`, err);
+        if (!data) return null;
+        return new Uint8Array(await data.arrayBuffer());
+    } catch (e) {
+        console.error(`Failed to fetch image ${filePath}:`, e);
         return null;
     }
-};
+}
 
-const createKopSuratHtml = (pengaturan: any, logoBase64: string | null) => {
-  const logoTag = logoBase64 ? `<img src="${logoBase64}" style="width: 75px; height: 75px; margin-right: 20px;" />` : '';
-  return `
-    <div style="display: flex; align-items: center; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px;">
-      ${logoTag}
-      <div style="text-align: center; width: 100%;">
-        <p style="margin: 0; font-size: 16px; font-weight: bold;">PEMERINTAH KABUPATEN ${pengaturan.kabupaten?.toUpperCase() || ''}</p>
-        <p style="margin: 0; font-size: 18px; font-weight: bold;">KECAMATAN ${pengaturan.kecamatan?.toUpperCase() || ''}</p>
-        <p style="margin: 0; font-size: 24px; font-weight: bold;">KEPALA DESA ${pengaturan.namaDesa?.toUpperCase() || ''}</p>
-        <p style="margin: 0; font-size: 12px;">${pengaturan.alamatKantor || ''}</p>
-      </div>
-    </div>
-  `;
-};
-
-const createTtdHtml = (pengesah: any, pengaturan: any, ttdBase64: string | null, stempelBase64: string | null) => {
-    const ttdTag = ttdBase64 ? `<img src="${ttdBase64}" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 100px; height: auto;" />` : '';
-    const stempelTag = stempelBase64 ? `<img src="${stempelBase64}" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 110px; height: auto; opacity: 0.7;" />` : '';
-    const namaKades = pengesah?.profile?.namaLengkap || '(Nama Kepala Desa)';
-
-  return `
-    <div style="width: 250px; margin-left: auto; margin-top: 30px; text-align: center; font-size: 14px; page-break-inside: avoid;">
-      <p style="margin: 0;">${pengaturan.namaDesa}, ${new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}</p>
-      <p style="margin: 0;">Kepala Desa ${pengaturan.namaDesa},</p>
-      <div style="position: relative; height: 120px; margin-top: 5px;">
-        ${stempelTag}
-        ${ttdTag}
-      </div>
-      <p style="font-weight: bold; text-decoration: underline; margin: 0;">${namaKades}</p>
-    </div>
-  `;
-};
-
-
-
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  const { id } = params;
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
-    }
-
-    const [surat, pengaturanDesa] = await Promise.all([
-      prisma.suratKeluar.findUnique({ where: { id }, include: { pemohon: { include: { profile: true } }, template: true, pengesah: { include: { profile: true } } } }),
-      prisma.pengaturanDesa.findFirst()
-    ]);
-
-    if (!surat || !pengaturanDesa || !surat.pengesah?.profile) {
-      return new Response(JSON.stringify({ message: 'Data penting tidak lengkap.' }), { status: 404 });
-    }
-
-    const [logoBase64, ttdBase64, stempelBase64] = await Promise.all([
-      fetchImageAsBase64(pengaturanDesa.logoDesaUrl),
-      fetchImageAsBase64(surat.pengesah.profile.urlTandaTangan),
-      fetchImageAsBase64(surat.pengesah.profile.urlStempel)
-    ]);
+/**
+ * Fungsi gambar teks yang telah diperbaiki.
+ * Ia memecah teks menjadi baris-baris terlebih dahulu, lalu melakukan wrapping per baris.
+ * @returns Posisi Y (y-coordinate) setelah semua teks selesai digambar.
+ */
+function drawTextAndWrap(page: any, text: string, options: { x: number, y: number, font: PDFFont, size: number, lineHeight: number, maxWidth: number }): number {
+    const { x, font, size, lineHeight, maxWidth } = options;
+    let y = options.y;
     
-    let htmlBody = surat.template.templateHtml;
-    const allData = { ...(surat.pemohon.profile || {}), ...(surat.formData as any || {}) };
-    for (const [key, value] of Object.entries(allData)) {
-      if (value !== null && value !== undefined) {
-        htmlBody = htmlBody.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
-      }
+    // 1. Pecah seluruh teks menjadi paragraf/baris berdasarkan newline character.
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+        // 2. Untuk setiap baris, lakukan word wrapping.
+        const words = line.split(' ');
+        let currentLine = '';
+        
+        if (words.length === 0 || line.trim() === '') {
+            y -= lineHeight; // Jika baris kosong, hanya turunkan posisi Y
+            continue;
+        }
+
+        for (const word of words) {
+            const testLine = currentLine.length > 0 ? `${currentLine} ${word}` : word;
+            const testWidth = font.widthOfTextAtSize(testLine, size);
+
+            if (testWidth > maxWidth && currentLine.length > 0) {
+                page.drawText(currentLine, { x, y, font, size, color: rgb(0, 0, 0) });
+                y -= lineHeight;
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+
+        // Gambar sisa baris terakhir
+        page.drawText(currentLine, { x, y, font, size, color: rgb(0, 0, 0) });
+        y -= lineHeight;
     }
 
-    const fullHtml = `
-      <html>
-        <head>
-          <style>
-            body { margin: 0; padding: 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; }
-            .page { width: 210mm; min-height: 297mm; padding: 20mm; box-sizing: border-box; background-color: white; }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            ${createKopSuratHtml(pengaturanDesa, logoBase64)}
-            ${htmlBody}
-            ${createTtdHtml(surat.pengesah, pengaturanDesa, ttdBase64, stempelBase64)}
-          </div>
-        </body>
-      </html>
-    `;
+    return y; // Kembalikan posisi Y terakhir
+}
 
-    return NextResponse.json({ html: fullHtml, fileName: `surat-${surat.template.kodeSurat}-${surat.pemohon.profile?.nik}.pdf` });
 
-  } catch (error) {
-    console.error("HTML_GENERATION_ERROR", error);
-    return new Response(JSON.stringify({ message: 'Gagal menyusun HTML surat.' }), { status: 500 });
-  }
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+    const { id } = params;
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+        return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    try {
+        const [surat, pengaturanDesa] = await Promise.all([
+            prisma.suratKeluar.findUnique({
+                where: { id },
+                include: { pemohon: { include: { profile: true } }, template: true, pengesah: { include: { profile: true } } }
+            }),
+            prisma.pengaturanDesa.findFirst()
+        ]);
+
+        if (!surat) return new Response(JSON.stringify({ message: "Surat tidak ditemukan." }), { status: 404 });
+        if (!pengaturanDesa) return new Response(JSON.stringify({ message: "Pengaturan desa belum dikonfigurasi." }), { status: 404 });
+        if (!surat.pengesah?.profile) return new Response(JSON.stringify({ message: "Data pengesah (Kepala Desa) tidak lengkap." }), { status: 404 });
+
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage(PageSizes.A4);
+        const { width, height } = page.getSize();
+        const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+        const margin = 70;
+        let yPosition = height - margin;
+
+        const logoBytes = await fetchImage(pengaturanDesa.logoDesaUrl);
+        if (logoBytes) {
+            const logoImage = await pdfDoc.embedPng(logoBytes);
+            page.drawImage(logoImage, { x: margin, y: height - 120, width: 75, height: 75 });
+        }
+
+        const centerPos = width / 2;
+        yPosition = height - 60;
+        
+        let text = `PEMERINTAH KABUPATEN ${pengaturanDesa.kabupaten?.toUpperCase()}`;
+        let textWidth = boldFont.widthOfTextAtSize(text, 14);
+        page.drawText(text, { x: centerPos - textWidth / 2, y: yPosition, font: boldFont, size: 14, color: rgb(0, 0, 0) });
+        
+        yPosition -= 20;
+        text = `KECAMATAN ${pengaturanDesa.kecamatan?.toUpperCase()}`;
+        textWidth = boldFont.widthOfTextAtSize(text, 16);
+        page.drawText(text, { x: centerPos - textWidth / 2, y: yPosition, font: boldFont, size: 16, color: rgb(0, 0, 0) });
+        
+        yPosition -= 25;
+        text = `KEPALA DESA ${pengaturanDesa.namaDesa?.toUpperCase()}`;
+        textWidth = boldFont.widthOfTextAtSize(text, 20);
+        page.drawText(text, { x: centerPos - textWidth / 2, y: yPosition, font: boldFont, size: 20, color: rgb(0, 0, 0) });
+
+        yPosition -= 15;
+        text = pengaturanDesa.alamatKantor;
+        textWidth = font.widthOfTextAtSize(text, 10);
+        page.drawText(text, { x: centerPos - textWidth / 2, y: yPosition, font: font, size: 10, color: rgb(0, 0, 0) });
+
+        yPosition -= 10;
+        page.drawLine({ start: { x: margin, y: yPosition }, end: { x: width - margin, y: yPosition }, thickness: 3 });
+        yPosition -= 50;
+
+        const judulSurat = `SURAT KETERANGAN ${surat.template.namaSurat.toUpperCase()}`;
+        const nomorSurat = `Nomor: ${surat.nomorSurat || '470/___/PEM'}`;
+        const judulWidth = boldFont.widthOfTextAtSize(judulSurat, 14);
+        const nomorWidth = font.widthOfTextAtSize(nomorSurat, 12);
+        
+        page.drawText(judulSurat, { x: (width - judulWidth) / 2, y: yPosition, font: boldFont, size: 14, color: rgb(0, 0, 0) });
+        yPosition -= 15;
+        page.drawLine({ start: { x: (width - judulWidth) / 2, y: yPosition }, end: { x: ((width - judulWidth) / 2) + judulWidth, y: yPosition }, thickness: 1 });
+        yPosition -= 15;
+        page.drawText(nomorSurat, { x: (width - nomorWidth) / 2, y: yPosition, font: font, size: 12, color: rgb(0, 0, 0) });
+        yPosition -= 40;
+
+        const allData = { ...(surat.pemohon.profile || {}), ...(surat.formData as any || {}) };
+
+        let bodyText = surat.template.templateHtml
+            .replace(/<p>.*?<\/p>/g, match => `${match.replace(/<\/?p>/g, '')}\n`)
+            .replace(/<br\s*\/?>/g, '\n')
+            .replace(/<strong>(.*?)<\/strong>/gi, '$1')
+            .replace(/<em>(.*?)<\/em>/gi, '$1')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/<[^>]+>/g, ''); // Hapus sisa tag HTML
+        
+        for (const [key, value] of Object.entries(allData)) {
+            bodyText = bodyText.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+        }
+
+        yPosition = drawTextAndWrap(page, bodyText, {
+            x: margin,
+            y: yPosition,
+            font: font,
+            size: 12,
+            lineHeight: 18,
+            maxWidth: width - (margin * 2),
+        });
+
+        const ttdBytes = await fetchImage(surat.pengesah.profile.urlTandaTangan);
+        const stempelBytes = await fetchImage(surat.pengesah.profile.urlStempel);
+        const namaKades = surat.pengesah.profile.namaLengkap;
+
+        const ttdBlockX = width - margin - 250;
+        let ttdY = yPosition > 250 ? yPosition - 30 : 250;
+        
+        page.drawText(`Dikeluarkan di: ${pengaturanDesa.namaDesa}`, { x: ttdBlockX, y: ttdY, font: font, size: 12 });
+        page.drawText(`Pada tanggal: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`, { x: ttdBlockX, y: ttdY - 15, font: font, size: 12 });
+        page.drawText(`Kepala Desa ${pengaturanDesa.namaDesa},`, { x: ttdBlockX, y: ttdY - 45, font: boldFont, size: 12 });
+
+        if (stempelBytes) {
+            const stempelImage = await pdfDoc.embedPng(stempelBytes);
+            page.drawImage(stempelImage, { x: ttdBlockX + 30, y: ttdY - 125, width: 100, height: 100, opacity: 0.75 });
+        }
+        if (ttdBytes) {
+            const ttdImage = await pdfDoc.embedPng(ttdBytes);
+            page.drawImage(ttdImage, { x: ttdBlockX + 25, y: ttdY - 100, width: 110, height: 55 });
+        }
+        
+        const kadesText = namaKades.toUpperCase();
+        const kadesTextWidth = boldFont.widthOfTextAtSize(kadesText, 12);
+        page.drawText(kadesText, { x: ttdBlockX + (125 - kadesTextWidth) / 2, y: ttdY - 130, font: boldFont, size: 12 });
+        page.drawLine({ start: { x: ttdBlockX + (125 - kadesTextWidth) / 2, y: ttdY - 132 }, end: { x: ttdBlockX + (125 - kadesTextWidth) / 2 + kadesTextWidth, y: ttdY - 132 }, thickness: 1 });
+
+        const pdfBytes = await pdfDoc.save();
+        const kodeSurat = surat.template.kodeSurat.trim();
+        const nik = surat.pemohon.profile?.nik?.trim() || 'warga';
+        const fileName = `surat-${kodeSurat}-${nik}.pdf`;
+
+        return new Response(pdfBytes, {
+            headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${fileName}"` },
+        });
+
+    } catch (error) {
+        console.error("PDF_GENERATION_ERROR:", error);
+        return new Response(JSON.stringify({ message: "Gagal membuat file PDF." }), { status: 500 });
+    }
 }

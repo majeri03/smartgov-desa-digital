@@ -1,3 +1,32 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.smartgov-editor {
+  @apply mx-auto my-4 min-h-[29.7cm] w-full max-w-[21cm] bg-white p-12 shadow-md transition-shadow duration-300 focus:outline-none focus:ring-2 focus:ring-primary;
+  font-family: 'Times New Roman', Times, serif;
+  line-height: 1.5;
+  font-size: 12pt;
+}
+
+/* Mengatur agar heading di editor terlihat sesuai */
+.smartgov-editor h1, .smartgov-editor h2, .smartgov-editor h3 {
+  @apply font-bold;
+}
+
+.smartgov-editor h1 {
+  @apply text-2xl;
+}
+
+.smartgov-editor h2 {
+  @apply text-xl;
+}
+
+.smartgov-editor h3 {
+  @apply text-lg;
+}
+
+/* Placeholder styling */
+.smartgov-editor p {
+    margin: 0;
+}

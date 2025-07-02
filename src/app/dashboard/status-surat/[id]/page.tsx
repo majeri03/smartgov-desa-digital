@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback, useTransition } from 'react';
 import { useParams } from 'next/navigation';
 import AppLayout from '@/app/components/AppLayout';
 import { StatusSurat, LogAktivitas, Prisma } from '@/generated/prisma';
-import html2pdf from 'html2pdf.js';
 
 // Tipe data yang lebih spesifik untuk data yang kita terima dari API
 type SuratDetail = Prisma.SuratKeluarGetPayload<{
@@ -224,39 +223,50 @@ export default function StatusSuratDetailPage() {
   };
 
   const handleDownload = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-        const response = await fetch(`/api/surat/unduh/${id}`);
+    if (!surat) return;
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/surat/unduh/${surat.id}`);
+
         if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.message || 'Gagal mengambil data surat.');
+          const errData = await response.json();
+          throw new Error(errData.message || 'Gagal mengunduh surat.');
         }
-        const { html, fileName } = await response.json();
 
-        // html2pdf.js bekerja paling baik dengan elemen DOM, bukan string
-        const element = document.createElement('div');
-        element.innerHTML = html;
-        document.body.appendChild(element); // Tambahkan sementara ke DOM
-
-        const opt = {
-            margin:       0,
-            filename:     fileName,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        // --- SOLUSI DEFINITIF: SANITASI ANTI-GAGAL ---
+        // Fungsi ini sekarang aman bahkan jika inputnya null atau undefined.
+        const sanitize = (str: string | null | undefined): string => {
+            if (!str) return ''; // Jika input tidak ada, kembalikan string kosong.
+            return str.replace(/[^a-zA-Z0-9-]/g, '');
         };
 
-        await html2pdf().from(element).set(opt).save();
+        const kodeSurat = sanitize(surat.template.kodeSurat);
+        const nik = sanitize(surat.pemohon.profile?.nik) || 'warga'; // Fallback jika NIK kosong
+        const fileName = `surat-${kodeSurat}-${nik}.pdf`;
+        
+        // Konversi respons menjadi blob (data biner)
+        const blob = await response.blob();
+        
+        // Buat URL sementara di memori untuk file blob
+        const url = window.URL.createObjectURL(blob);
+        
+        // Buat elemen link tak terlihat untuk memicu unduhan
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName; // Gunakan nama file yang sudah 100% bersih
+        document.body.appendChild(a);
+        a.click();
+        
+        // Bersihkan setelah selesai untuk menghindari kebocoran memori
+        window.URL.revokeObjectURL(url);
+        a.remove();
 
-        document.body.removeChild(element); // Hapus elemen setelah selesai
-    } catch (err: any) {
-        setError(err.message);
+      } catch (err: any) {
         alert(`Error: ${err.message}`);
-    } finally {
-        setIsLoading(false);
-    }
-};
+      }
+    });
+  };
 
   const renderContent = () => {
     if (isLoading) return <p>Memuat detail status surat...</p>;
@@ -297,10 +307,10 @@ export default function StatusSuratDetailPage() {
             <p className="mt-2 text-sm text-green-700">Surat resmi Anda telah disetujui dan siap untuk diunduh atau diambil di kantor desa.</p>
             <button
               onClick={handleDownload}
-              disabled={isLoading}
+              disabled={isSubmitting} // Ganti isLoading menjadi isSubmitting
               className="..."
             >
-              {isLoading ? 'Mempersiapkan...' : 'Unduh Surat Digital (.pdf)'}
+              {isSubmitting ? 'Mempersiapkan...' : 'Unduh Surat Digital (.pdf)'}
             </button>
           </div>
         )}

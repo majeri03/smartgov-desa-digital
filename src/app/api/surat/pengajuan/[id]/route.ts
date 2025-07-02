@@ -22,7 +22,7 @@ export async function GET(
 
   try {
     const surat = await prisma.suratKeluar.findUnique({
-      where: { id: id },
+      where: {id},
       include: {
         template: {
           select: { namaSurat: true,
