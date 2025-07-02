@@ -13,7 +13,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import { FontSize } from './tiptap-extensions/FontSize';
 import TextStyle from '@tiptap/extension-text-style';
-
+import Underline from '@tiptap/extension-underline';
 
 
 // --- Toolbar ---
@@ -60,6 +60,7 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       {/* Text Style Controls */}
       <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'rounded bg-gray-300 p-1.5' : 'rounded p-1.5 hover:bg-gray-200'}><b>B</b></button>
       <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'rounded bg-gray-300 p-1.5' : 'rounded p-1.5 hover:bg-gray-200'}><i>I</i></button>
+      <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} className={editor.isActive('underline') ? 'rounded bg-gray-300 p-1.5' : 'rounded p-1.5 hover:bg-gray-200'}><u>U</u></button>
       
       <div className="mx-1 h-5 w-px bg-gray-300"></div>
 
@@ -123,6 +124,7 @@ const TiptapEditor = ({ content, onChange }: { content: string, onChange: (richT
       Table.configure({
         resizable: true,
       }),
+      Underline,
       TableRow,
       TableHeader,
       TableCell.extend({
