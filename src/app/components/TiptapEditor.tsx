@@ -3,7 +3,7 @@
 
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import React from 'react';
+import React, { useEffect } from 'react';
 
 // Impor ekstensi yang kita butuhkan
 import TextAlign from '@tiptap/extension-text-align';
@@ -11,6 +11,9 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
+import { FontSize } from './tiptap-extensions/FontSize';
+import TextStyle from '@tiptap/extension-text-style';
+
 
 
 // --- Toolbar ---
@@ -25,12 +28,32 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       editor.chain().focus().insertContent(`{{${placeholder.trim().replace(/\s/g, '_')}}}`).run();
     }
   };
+  const setTablePadding = (padding: string) => {
+      editor.chain().focus().selectAll().setCellAttribute('style', `padding: ${padding}`).run();
+    };
 
   return (
     <div className="flex flex-wrap items-center gap-1 rounded-t-lg border bg-gray-50 p-2">
+      <div className="flex flex-wrap items-center gap-1 p-2">
+        {/* --- PERUBAHAN: Tambahkan Kontrol Font Size --- */}
+        <select
+          value={editor.getAttributes('textStyle').fontSize || '12pt'}
+          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+          className="rounded border-gray-300 text-sm focus:ring-primary"
+        >
+          <option value="10pt">10</option>
+          <option value="11pt">11</option>
+          <option value="12pt">12 (Default)</option>
+          <option value="14pt">14</option>
+          <option value="16pt">16</option>
+          <option value="18pt">18</option>
+          <option value="19pt">19</option>
+          <option value="20pt">20</option>
+          <option value="23pt">23</option>
+          <option value="25pt">25</option>
+        </select>
+        </div>
       {/* Heading Controls */}
-      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={editor.isActive('heading', { level: 1 }) ? 'rounded bg-gray-300 p-1.5 font-bold' : 'rounded p-1.5 font-bold hover:bg-gray-200'}>H1</button>
-      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={editor.isActive('heading', { level: 2 }) ? 'rounded bg-gray-300 p-1.5 font-bold' : 'rounded p-1.5 font-bold hover:bg-gray-200'}>H2</button>
       
       <div className="mx-1 h-5 w-px bg-gray-300"></div>
 
@@ -61,6 +84,26 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       {/* Placeholder - Pindah ke ujung kanan */}
       <div className="flex-grow"></div>
       <button type="button" onClick={addPlaceholder} className="rounded bg-primary/10 p-1.5 text-sm font-semibold text-primary hover:bg-primary/20">Sisipkan Data</button>
+      {editor.isActive('table') && (
+        <div className="flex flex-wrap items-center gap-1 border-t bg-gray-100 p-2">
+          <span className="mr-2 text-xs font-bold text-gray-500">TABEL:</span>
+          <button type="button" onClick={() => editor.chain().focus().addColumnBefore().run()} className="rounded p-1.5 text-sm hover:bg-gray-200">Tambah Kolom Kiri</button>
+          <button type="button" onClick={() => editor.chain().focus().addColumnAfter().run()} className="rounded p-1.5 text-sm hover:bg-gray-200">Tambah Kolom Kanan</button>
+          <button type="button" onClick={() => editor.chain().focus().deleteColumn().run()} className="rounded p-1.5 text-sm text-red-600 hover:bg-gray-200">Hapus Kolom</button>
+          <div className="mx-1 h-5 w-px bg-gray-300"></div>
+          <button type="button" onClick={() => editor.chain().focus().addRowBefore().run()} className="rounded p-1.5 text-sm hover:bg-gray-200">Tambah Baris Atas</button>
+          <button type="button" onClick={() => editor.chain().focus().addRowAfter().run()} className="rounded p-1.5 text-sm hover:bg-gray-200">Tambah Baris Bawah</button>
+          <button type="button" onClick={() => editor.chain().focus().deleteRow().run()} className="rounded p-1.5 text-sm text-red-600 hover:bg-gray-200">Hapus Baris</button>
+          <div className="mx-1 h-5 w-px bg-gray-300"></div>
+          <button type="button" onClick={() => editor.chain().focus().mergeOrSplit().run()} className="rounded p-1.5 text-sm hover:bg-gray-200">Gabung/Pisah Sel</button>
+          <button type="button" onClick={() => editor.chain().focus().deleteTable().run()} className="rounded p-1.5 text-sm text-red-600 hover:bg-gray-200">Hapus Tabel</button>
+          <div className="mx-1 h-5 w-px bg-gray-300"></div>
+          <span className="mr-2 text-xs font-bold text-gray-500">SPASI SEL:</span>
+          <button type="button" onClick={() => setTablePadding('2px')} className="rounded p-1.5 text-sm hover:bg-gray-200">Rapat</button>
+          <button type="button" onClick={() => setTablePadding('4px')} className="rounded p-1.5 text-sm hover:bg-gray-200">Normal</button>
+          <button type="button" onClick={() => setTablePadding('8px')} className="rounded p-1.5 text-sm hover:bg-gray-200">Renggang</button>
+        </div>
+      )}
     </div>
   );
 };
@@ -69,17 +112,31 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
 const TiptapEditor = ({ content, onChange }: { content: string, onChange: (richText: string) => void }) => {
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+      }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      TextStyle,    // Dasar untuk ekstensi kustom kita
+      FontSize,
       // Konfigurasi Table agar bisa di-resize
       Table.configure({
         resizable: true,
       }),
       TableRow,
       TableHeader,
-      TableCell,
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            // Izinkan atribut 'style' untuk menyimpan padding
+            style: {
+              default: null,
+            },
+          };
+        },
+        content: 'block+',
+      }),
     ],
     content: content,
     editorProps: {
@@ -91,6 +148,19 @@ const TiptapEditor = ({ content, onChange }: { content: string, onChange: (richT
       onChange(editor.getHTML());
     },
   });
+
+   useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    // Cek jika konten prop berbeda dengan konten di editor
+    const isSame = editor.getHTML() === content;
+    if (!isSame) {
+      // Perintahkan editor untuk mengatur kontennya sesuai prop yang baru
+      // `false` mencegah onUpdate terpicu lagi untuk menghindari loop tak terbatas
+      editor.commands.setContent(content, false);
+    }
+  }, [content, editor]);
 
   return (
     <div className="rounded-lg border bg-gray-100 p-2 shadow-inner sm:p-4">

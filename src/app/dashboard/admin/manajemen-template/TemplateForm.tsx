@@ -29,6 +29,23 @@ export default function TemplateForm({ initialData, isEditMode }: TemplateFormPr
 
   const [isSaving, startTransition] = useTransition();
   const router = useRouter();
+
+  useEffect(() => {
+    if (isEditMode && initialData) {
+      setNamaSurat(initialData.namaSurat);
+      setKodeSurat(initialData.kodeSurat);
+      setDeskripsi(initialData.deskripsi || '');
+      setPersyaratan((initialData.persyaratan || []).join('\n'));
+      setTemplateHtml(initialData.templateHtml); // Mengatur state yang akan dikirim ke TiptapEditor
+      if (initialData.formSchema && Array.isArray(initialData.formSchema)) {
+        setFormSchema(initialData.formSchema as any);
+      } else {
+        setFormSchema([]);
+      }
+      setIsActive(initialData.isActive);
+    }
+  }, [initialData, isEditMode]);
+
   const handleSchemaChange = (index: number, fieldName: keyof FormField, value: string) => {
   const updatedSchema = [...formSchema];
   updatedSchema[index] = { ...updatedSchema[index], [fieldName]: value };

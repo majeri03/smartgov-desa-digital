@@ -8,6 +8,17 @@
   line-height: 1.5;
   font-size: 12pt;
 }
+.smartgov-editor table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.smartgov-editor th,
+.smartgov-editor td {
+  /* Ini akan membuat garis putus-putus tipis HANYA di dalam editor */
+  border: 1px dashed #ccc !important; 
+  padding: 4px 8px;
+}
 
 /* Mengatur agar heading di editor terlihat sesuai */
 .smartgov-editor h1, .smartgov-editor h2, .smartgov-editor h3 {
