@@ -7,14 +7,14 @@
 
     export async function GET(
       request: Request,
-      { params }: { params: { id: string } }
+      { params }: { params: Promise<{ id: string }> }
     ) {
-      const { id } = params;
+      const { id } = await params;
       const session = await getServerSession(authOptions);
       if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
       }
-
+      
       try {
         const template = await prisma.templateSurat.findUnique({
           where: { id: id },
@@ -30,19 +30,20 @@
 
     export async function PUT(
       request: Request,
-      { params }: { params: { id: string } }
+      { params }: { params: Promise<{ id: string }> }
     ) {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
             return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
         }
-
+        
         try {
             const body = await request.json();
             const { namaSurat, deskripsi, persyaratan, templateHtml, isActive } = body;
             
             const updatedTemplate = await prisma.templateSurat.update({
-                where: { id: params.id },
+                where: { id: id },
                 data: {
                     namaSurat,
                     deskripsi,
@@ -61,8 +62,9 @@
     // Ganti fungsi DELETE yang lama dengan yang ini
     export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
     ) {
+      const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
@@ -71,7 +73,7 @@
     try {
         // Logika Hard Delete
         await prisma.templateSurat.delete({
-        where: { id: params.id },
+        where: { id: id },
         });
         return NextResponse.json({ message: 'Template berhasil dihapus secara permanen.' }, { status: 200 });
     } catch (error) {

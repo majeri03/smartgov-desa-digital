@@ -9,9 +9,9 @@ const prisma = new PrismaClient();
 // Fungsi GET untuk mengambil detail lengkap pengajuan
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
@@ -38,7 +38,7 @@ export async function GET(
 // Fungsi PUT untuk memproses verifikasi (Setuju/Tolak)
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== Role.STAF && session.user.role !== Role.KEPALA_DESA)) {
@@ -47,7 +47,7 @@ export async function PUT(
 
   try {
     const { action, catatanRevisi } = await request.json();
-    const { id } = params;
+    const { id } = await params;
 
     if (!action || (action === 'TOLAK' && !catatanRevisi)) {
       return NextResponse.json({ message: 'Aksi atau catatan revisi tidak lengkap.' }, { status: 400 });
