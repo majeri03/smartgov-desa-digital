@@ -2,16 +2,16 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, Role, StatusSurat } from '@/generated/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth.config';
 
 const prisma = new PrismaClient();
 
 // Fungsi GET untuk mengambil detail lengkap surat yang sudah diverifikasi
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (session?.user.role !== Role.KEPALA_DESA) {
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
@@ -42,7 +42,7 @@ export async function GET(
 // Fungsi PUT untuk memproses persetujuan atau penolakan final
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (session?.user.role !== Role.KEPALA_DESA) {
@@ -51,7 +51,7 @@ export async function PUT(
 
   try {
     const { action, catatanPenolakan } = await request.json();
-    const { id } = params;
+    const { id } = await params;
 
     let newStatus: StatusSurat;
     let logAksi: string;

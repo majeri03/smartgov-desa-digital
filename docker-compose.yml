@@ -13,10 +13,12 @@ services:
       - NEXTAUTH_URL=http://localhost:3000
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      # Flag ini sering membantu file watching di dalam Docker
-      - CHOKIDAR_USEPOLLING=true
-    volumes:
-      # Sinkronkan kode sumber Anda, tetapi abaikan node_modules dan .next
-      - .:/app
-      - /app/node_modules
-      - /app/.next
+      - NODE_ENV=production
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+    # Shared memory yang lebih besar untuk Chrome
+    shm_size: '2gb'
+    # Memory limit untuk mencegah crash
+    mem_limit: 2g
+    # CPU limit yang reasonable
+    cpus: '1.0'

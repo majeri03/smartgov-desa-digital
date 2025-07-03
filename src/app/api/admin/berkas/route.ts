@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth.config';
 import { Role } from '@/generated/prisma';
 
 const supabaseAdmin = createClient(

@@ -2,19 +2,19 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, Role } from '@/generated/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth.config';
 
 const prisma = new PrismaClient();
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
-  const { id } = params;
+  const { id } = await params;
 
   if (!id) {
     return NextResponse.json({ message: 'ID Pengajuan diperlukan.' }, { status: 400 });

@@ -1,5 +1,6 @@
-// src/types/next-auth.d.ts
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { JWT, DefaultJWT } from "next-auth/jwt";
 import { Role } from "@prisma/client"; // Impor enum Role dari Prisma
 

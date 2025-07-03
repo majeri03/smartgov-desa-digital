@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@/generated/prisma';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth.config';
 import { getServerSession } from 'next-auth/next';
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
@@ -39,23 +39,60 @@ function replacePlaceholders(text: string, data: Record<string, any>): string {
     });
 }
 
+function getBrowserConfig() {
+    // Jika di Docker/production, gunakan Chrome yang terinstall sistem
+    if (process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true') {
+        return {
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                '--no-first-run',
+                '--no-default-browser-check'
+            ]
+        };
+    }
+    
+    // Untuk development lokal, biarkan Puppeteer menggunakan bundled Chromium
+    return {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    };
+}
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-    const { id } = params;
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 });
 
+    let browser;
     try {
         const [surat, pengaturanDesa] = await Promise.all([
             prisma.suratKeluar.findUnique({ where: { id }, include: { pemohon: { include: { profile: true } }, template: true, pengesah: { include: { profile: true } } } }),
             prisma.pengaturanDesa.findFirst()
         ]);
-        if (!surat || !pengaturanDesa) return new Response(JSON.stringify({ message: "Data surat atau pengaturan tidak lengkap." }), { status: 404 });
+        
+        if (!surat || !pengaturanDesa) {
+            return new Response(JSON.stringify({ message: "Data surat atau pengaturan tidak lengkap." }), { status: 404 });
+        }
 
         const allData = { 
-            pemohon: surat.pemohon.profile, form: surat.formData, pengesah: surat.pengesah?.profile, desa: pengaturanDesa, 
-            nomorSurat: surat.nomorSurat || '470/___/PEM', 
-            tanggalSurat: surat.tanggalSelesai ? new Date(surat.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+            pemohon: surat.pemohon.profile, 
+            form: surat.formData, 
+            pengesah: surat.pengesah?.profile, 
+            desa: pengaturanDesa,
+            nomorSurat: surat.nomorSurat || '470/___/PEM',
+            tanggalSurat: surat.tanggalSelesai ? 
+                new Date(surat.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : 
+                new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
         };
         
         const logoDesaBase64 = await getBase64Image(pengaturanDesa.logoDesaUrl || null);
@@ -68,6 +105,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
             <!DOCTYPE html>
             <html>
             <head>
+                <meta charset="UTF-8">
                 <style>
                     body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; margin: 0; }
                     .page { width: 21cm; min-height: 29.7cm; padding: 2cm; margin: 0 auto; background: white; }
@@ -125,26 +163,72 @@ export async function GET(request: Request, { params }: { params: { id: string }
             </html>
         `;
 
-        const browser = await puppeteer.launch({ 
-            executablePath: '/usr/bin/google-chrome', // Path ke Chrome di dalam kontainer Docker
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-        });
-        const page = await browser.newPage();
-        await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+        // Gunakan konfigurasi browser yang dinamis
+        const browserConfig = getBrowserConfig();
+        browser = await puppeteer.launch(browserConfig);
         
+        const page = await browser.newPage();
+        
+        // Set viewport untuk konsistensi
+        await page.setViewport({ width: 1200, height: 1600 });
+        
+        // Set content dengan timeout yang lebih panjang
+        await page.setContent(fullHtml, { 
+            waitUntil: 'networkidle0',
+            timeout: 30000 
+        });
+        
+        // Generate PDF dengan opsi yang lebih komprehensif
         const pdfBytes = await page.pdf({
             format: 'A4',
             printBackground: true,
+            margin: {
+                top: '0.5cm',
+                right: '0.5cm',
+                bottom: '0.5cm',
+                left: '0.5cm'
+            },
+            preferCSSPageSize: true
         });
 
-        await browser.close();
-        
         const fileName = `surat-${surat.template.kodeSurat}-${surat.pemohon.profile?.nik}.pdf`;
-        return new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${fileName}"` } });
+        
+        return new Response(pdfBytes, { 
+            headers: { 
+                'Content-Type': 'application/pdf', 
+                'Content-Disposition': `attachment; filename="${fileName}"`,
+                'Cache-Control': 'no-cache'
+            } 
+        });
 
     } catch (error) {
+        // Menangani error dengan type-safe approach
         console.error("PDF_GENERATION_ERROR:", error);
-        return new Response(JSON.stringify({ message: "Gagal membuat file PDF." }), { status: 500 });
+        
+        // Mengkonversi error ke format yang aman untuk logging dan response
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
+        // Log detail error untuk debugging (hanya di development)
+        if (process.env.NODE_ENV === 'development') {
+            console.error("Error stack:", errorStack);
+        }
+        
+        return new Response(
+            JSON.stringify({ 
+                message: "Gagal membuat file PDF.", 
+                error: process.env.NODE_ENV === 'development' ? errorMessage : undefined 
+            }), 
+            { status: 500 }
+        );
+    } finally {
+        // Pastikan browser ditutup bahkan jika terjadi error
+        if (browser) {
+            try {
+                await browser.close();
+            } catch (closeError) {
+                console.error("Error closing browser:", closeError);
+            }
+        }
     }
 }

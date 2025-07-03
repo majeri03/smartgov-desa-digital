@@ -2,13 +2,13 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@/generated/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth.config';
 
 const prisma = new PrismaClient();
 
 export async function GET(
   request: Request,
-  { params }: { params: { kodeSurat: string } }
+  { params }: { params: Promise<{ kodeSurat: string }> }
 ) {
   
   const session = await getServerSession(authOptions);
@@ -16,7 +16,7 @@ export async function GET(
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const { kodeSurat } = params;
+  const { kodeSurat } = await params;
 
   if (!kodeSurat) {
     return NextResponse.json({ message: 'Kode surat diperlukan.' }, { status: 400 });
