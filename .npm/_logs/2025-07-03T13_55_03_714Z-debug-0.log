@@ -1,0 +1,33 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.8.2
+2 info using node@v18.20.8
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/app/.npmrc
+5 silly config load:file:/usr/local/etc/npmrc
+6 verbose title npm run dev
+7 verbose argv "run" "dev"
+8 verbose logfile logs-max:10 dir:/app/.npm/_logs/2025-07-03T13_55_03_714Z-
+9 verbose logfile /app/.npm/_logs/2025-07-03T13_55_03_714Z-debug-0.log
+10 silly logfile done cleaning log files
+11 verbose stack Error: command failed
+11 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:22:22)
+11 verbose stack     at spawnWithShell (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:124:10)
+11 verbose stack     at promiseSpawn (/usr/local/lib/node_modules/npm/node_modules/@npmcli/promise-spawn/lib/index.js:12:12)
+11 verbose stack     at runScriptPkg (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script-pkg.js:77:13)
+11 verbose stack     at runScript (/usr/local/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/run-script.js:9:12)
+11 verbose stack     at #run (/usr/local/lib/node_modules/npm/lib/commands/run-script.js:130:13)
+11 verbose stack     at async RunScript.exec (/usr/local/lib/node_modules/npm/lib/commands/run-script.js:39:7)
+11 verbose stack     at async Npm.exec (/usr/local/lib/node_modules/npm/lib/npm.js:207:9)
+11 verbose stack     at async module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:74:5)
+12 verbose pkgid smartgov-desa-digital@0.1.0
+13 error path /app
+14 error command failed
+15 error signal SIGTERM
+16 error command sh -c next dev
+17 verbose cwd /app
+18 verbose os Linux 6.8.0-1027-azure
+19 verbose node v18.20.8
+20 verbose npm  v10.8.2
+21 verbose exit 1
+22 verbose code 1
+23 error A complete log of this run can be found in: /app/.npm/_logs/2025-07-03T13_55_03_714Z-debug-0.log

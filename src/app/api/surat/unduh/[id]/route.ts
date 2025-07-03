@@ -95,18 +95,29 @@ export async function GET(
                 new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
         };
         
+        // 1. Dapatkan semua aset seperti biasa
         const logoDesaBase64 = await getBase64Image(pengaturanDesa.logoDesaUrl || null);
         const ttdBase64 = await getBase64Image(surat.pengesah?.profile?.urlTandaTangan || null);
         const stempelBase64 = await getBase64Image(surat.pengesah?.profile?.urlStempel || null);
         
-        const finalHtmlContent = replacePlaceholders(surat.template.templateHtml, allData);
+        // 2. Ganti placeholder teks seperti biasa
+        let finalHtmlContent = replacePlaceholders(surat.template.templateHtml, allData);
 
+        // 3. Ganti placeholder gambar secara terpisah
+        const ttdImageTag = ttdBase64 ? `<img src="${ttdBase64}" class="ttd-image" />` : '';
+        const stempelImageTag = stempelBase64 ? `<img src="${stempelBase64}" class="stempel-image" />` : '';
+        
+        finalHtmlContent = finalHtmlContent.replace(/{{tanda_tangan}}/g, ttdImageTag);
+        finalHtmlContent = finalHtmlContent.replace(/{{stempel}}/g, stempelImageTag);
+
+        // 4. Struktur HTML utama disederhanakan, HAPUS bagian footer statis
         const fullHtml = `
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
                 <style>
+                    /* Style CSS tetap sama, namun style untuk .footer-container, .blok-ttd, dll. tidak lagi relevan */
                     body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; margin: 0; }
                     .page { width: 21cm; min-height: 29.7cm; padding: 2cm; margin: 0 auto; background: white; }
                     .kop-surat { text-align: center; border-bottom: 3px solid black; padding-bottom: 10px; position: relative; }
@@ -116,13 +127,41 @@ export async function GET(
                     .judul-surat h4 { margin: 0; text-decoration: underline; }
                     .judul-surat p { margin-top: 5px; }
                     .isi-surat { text-align: justify; }
-                    .isi-surat p, .isi-surat div { margin: 0 0 1em 0; }
-                    .footer-container { margin-top: 50px; }
-                    .blok-ttd { width: 40%; float: right; text-align: center; font-size: 12pt; }
-                    .blok-ttd .ttd-space { height: 120px; position: relative; }
-                    .blok-ttd .stempel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 120px; height: 120px; opacity: 0.75; }
-                    .blok-ttd .ttd { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 130px; height: 65px; }
-                    .clear { clear: both; }
+                    .isi-surat p, .isi-surat div, .isi-surat table { margin: 0 0 1em 0; }
+                    table { border-collapse: collapse; width: 100%; }
+                    td, th { border: 1px solid black; padding: 4px 8px; }
+                    /* Default untuk semua tabel (jika diperlukan) */
+                    /* Aturan untuk tabel YANG PUNYA BORDER (seperti di gambar Anda) */
+                    table.bergaris td, table.bergaris th {
+                        border: 1px solid black;
+                        padding: 4px 8px;
+                    }
+
+                    /* Aturan untuk tabel DATA KEY-VALUE YANG RAPI (tanpa border) */
+                    table.data-rapi, table.data-rapi tr, table.data-rapi td {
+                        border: none; /* Menghilangkan border */
+                        padding: 1px 2px; /* Memberi sedikit jarak */
+                    }
+                    .signature-area {
+                        position: relative; /* Membuat area ini menjadi acuan untuk elemen di dalamnya */
+                        display: inline-block; /* Agar ukuran div sesuai konten */
+                        min-height: 120px; /* Beri ruang minimal untuk ttd dan stempel */
+                    }
+                    .ttd-image, .stempel-image {
+                        position: absolute; /* Mengeluarkan dari alur normal */
+                        left: 50%;
+                        top: 50%;
+                        transform: translate(-50%, -50%); /* Posisi tepat di tengah */
+                    }
+                    .ttd-image {
+                        z-index: 2; /* Layer tanda tangan di atas teks */
+                        width: 150px; /* Ukuran default TTD */
+                    }
+                    .stempel-image {
+                        z-index: 3; /* Layer stempel di paling atas */
+                        width: 120px; /* Ukuran default stempel */
+                        opacity: 0.8; /* Sedikit transparan agar tidak menutupi total */
+                    }
                 </style>
             </head>
             <body>
@@ -143,22 +182,8 @@ export async function GET(
                     <div class="isi-surat">
                         ${finalHtmlContent}
                     </div>
-
-                    <div class="footer-container">
-                        <div class="blok-ttd">
-                            <p>Dikeluarkan di : Bonto Marannu</p>
-                            <p>Pada tanggal : ${allData.tanggalSurat}</p>
-                            <p>Kepala Desa ${pengaturanDesa.namaDesa},</p>
-                            <div class="ttd-space">
-                                ${stempelBase64 ? `<img src="${stempelBase64}" class="stempel" />` : ''}
-                                ${ttdBase64 ? `<img src="${ttdBase64}" class="ttd" />` : ''}
-                            </div>
-                            <p style="font-weight: bold; text-decoration: underline;">${allData.pengesah?.namaLengkap || '...........................'}</p>
-                            <p>NIP. ${allData.pengesah?.nik || '...........................'}</p>
-                        </div>
-                        <div class="clear"></div>
+                    
                     </div>
-                </div>
             </body>
             </html>
         `;

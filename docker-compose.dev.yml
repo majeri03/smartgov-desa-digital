@@ -1,0 +1,27 @@
+# docker-compose.dev.yml
+
+version: '3.8'
+services:
+  web:
+    # Menggunakan image yang sudah ada dari docker-compose.yml
+    # atau build ulang jika belum ada
+    build: .
+    # Perintah ini menimpa perintah default untuk menjalankan mode pengembangan
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    # Bagian terpenting: Volumes
+    # Ini akan menyinkronkan file lokal Anda ke dalam container secara real-time
+    volumes:
+      - .:/app
+      # Anonymize folder node_modules untuk mencegah konflik
+      - /app/node_modules
+    environment:
+      # Ubah NODE_ENV ke development untuk mengaktifkan hot-reloading
+      - NODE_ENV=development
+      # Variabel lain bisa mengikuti dari file .env Anda
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
